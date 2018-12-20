@@ -1,0 +1,53 @@
+﻿<mps:ModPlusWindow x:Class="mmOrderMarking.WinScheduleAutoNum"
+                      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                      xmlns:mps="https://modplus.org/winfx/xaml/controls"
+                      SizeToContent="WidthAndHeight"
+                      ResizeMode="NoResize"
+                   Loaded="WinScheduleAutoNum_OnLoaded"
+                   Closing="WinScheduleAutoNum_OnClosing">
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="pack://application:,,,/ModPlusStyle;component/Styles/Controls.xaml"></ResourceDictionary>
+            </ResourceDictionary.MergedDictionaries>
+            <XmlDataProvider x:Key="Lang" Source="E:/ModPlus/Languages/en-US.xml" XPath="ModPlus/mmOrderMarking"></XmlDataProvider>
+        </ResourceDictionary>
+    </Window.Resources>
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"></RowDefinition>
+            <RowDefinition Height="Auto"></RowDefinition>
+        </Grid.RowDefinitions>
+        <Grid Grid.Row="0" HorizontalAlignment="Left">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="130"></ColumnDefinition>
+                <ColumnDefinition Width="Auto"></ColumnDefinition>
+                <ColumnDefinition Width="130"></ColumnDefinition>
+            </Grid.ColumnDefinitions>
+            <TextBox Name="TbPrefix"
+                     Grid.Row="0" Grid.Column="0"
+                     mps:HintAssist.IsFloating="True"
+                     mps:HintAssist.Hint="{Binding Source={StaticResource Lang}, XPath=h1}"
+                     mps:TextFieldAssist.ClearTextButton="True"></TextBox>
+            <TextBlock Grid.Row="0" Grid.Column="1"
+                       Text="{Binding Source={StaticResource Lang}, XPath=h2}"
+                       Margin="4 18 4 4"></TextBlock>
+            <TextBox Name="TbSuffix"
+                     Grid.Row="0" Grid.Column="2" 
+                     mps:HintAssist.IsFloating="True"
+                     mps:HintAssist.Hint="{Binding Source={StaticResource Lang}, XPath=h3}"
+                     mps:TextFieldAssist.ClearTextButton="True"/>
+        </Grid>
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"></ColumnDefinition>
+                <ColumnDefinition Width="*"></ColumnDefinition>
+            </Grid.ColumnDefinitions>
+            <Button Grid.Column="0" Content="{Binding Source={StaticResource Lang}, XPath=h4}" HorizontalAlignment="Left"
+                    Name="Do" Click="Do_Click"></Button>
+            <Button Grid.Column="1" Content="{Binding Source={StaticResource Lang}, XPath=h5}" HorizontalAlignment="Right"
+                    Name="Clear" Click="Clear_Click"></Button>
+        </Grid>
+    </Grid>
+</mps:ModPlusWindow>
