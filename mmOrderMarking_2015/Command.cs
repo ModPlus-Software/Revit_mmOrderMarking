@@ -1,9 +1,12 @@
 ﻿namespace mmOrderMarking
 {
     using System;
+    using System.Linq;
     using Autodesk.Revit.Attributes;
     using Autodesk.Revit.DB;
     using Autodesk.Revit.UI;
+    using ModPlusAPI;
+    using ModPlusAPI.Windows;
 
     [Transaction(TransactionMode.Manual)]
     [Regeneration(RegenerationOption.Manual)]
@@ -14,6 +17,17 @@
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
             ModPlusAPI.Statistic.SendCommandStarting(new Interface());
+
+            if (commandData.View is ViewSchedule)
+            {
+                var el = new FilteredElementCollector(commandData.View.Document, commandData.View.Id)
+                    .WhereElementIsNotElementType();
+                if (!el.Any())
+                {
+                    MessageBox.Show(Language.GetItem("mmOrderMarking", "m2"));
+                    return Result.Cancelled;
+                }
+            }
 
             // Working with window WPF
             if (_window == null)

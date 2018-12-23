@@ -18,6 +18,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"></RowDefinition>
             <RowDefinition Height="Auto"></RowDefinition>
+            <RowDefinition Height="Auto"></RowDefinition>
         </Grid.RowDefinitions>
         <Grid Grid.Row="0" HorizontalAlignment="Left">
             <Grid.ColumnDefinitions>
@@ -39,13 +40,51 @@
                      mps:HintAssist.Hint="{Binding Source={StaticResource Lang}, XPath=h3}"
                      mps:TextFieldAssist.ClearTextButton="True"/>
         </Grid>
-        <Grid Grid.Row="1">
+        <GroupBox Grid.Row="1" Padding="4 0 0 0"
+                  Header="{Binding Source={StaticResource Lang}, XPath=h6}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="200"/>
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <TextBlock Grid.Row="0" Grid.Column="0" 
+                           Text="{Binding Source={StaticResource Lang}, XPath=h7}"></TextBlock>
+                <mps:NumericBox Grid.Row="0" Grid.Column="1" Minimum="0"
+                                Name="TbStartValue"
+                                NumericInputMode="Numbers"></mps:NumericBox>
+                <TextBlock Grid.Row="1" Grid.Column="0" 
+                           Text="{Binding Source={StaticResource Lang}, XPath=h8}"></TextBlock>
+                <ComboBox Grid.Row="1" Grid.Column="1" Name="CbOrderBy">
+                    <ComboBoxItem Content="{Binding Source={StaticResource Lang}, XPath=o1}"></ComboBoxItem>
+                    <ComboBoxItem Content="{Binding Source={StaticResource Lang}, XPath=o2}"></ComboBoxItem>
+                </ComboBox>
+                <ComboBox Grid.Row="1" Grid.Column="1" Name="CbDirection">
+                    <ComboBoxItem Content="{Binding Source={StaticResource Lang}, XPath=d1}"></ComboBoxItem>
+                    <ComboBoxItem Content="{Binding Source={StaticResource Lang}, XPath=d2}"></ComboBoxItem>
+                    <ComboBoxItem Content="{Binding Source={StaticResource Lang}, XPath=d3}"></ComboBoxItem>
+                    <ComboBoxItem Content="{Binding Source={StaticResource Lang}, XPath=d4}"></ComboBoxItem>
+                    <ComboBoxItem Content="{Binding Source={StaticResource Lang}, XPath=d5}"></ComboBoxItem>
+                </ComboBox>
+                <TextBlock Grid.Row="2" Grid.Column="0" 
+                           Text="{Binding Source={StaticResource Lang}, XPath=h9}"></TextBlock>
+                <TextBox Grid.Row="2" Grid.Column="1" Name="TbParameter"></TextBox>
+                <ComboBox Grid.Row="2" Grid.Column="1" Name="CbParameter"></ComboBox>
+            </Grid>
+        </GroupBox>
+        <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"></ColumnDefinition>
                 <ColumnDefinition Width="*"></ColumnDefinition>
             </Grid.ColumnDefinitions>
             <Button Grid.Column="0" Content="{Binding Source={StaticResource Lang}, XPath=h4}" HorizontalAlignment="Left"
-                    Name="Do" Click="Do_Click"></Button>
+                    Name="Do" Click="Do_Click"
+                    ToolTipService.InitialShowDelay="0"
+                    ToolTipService.ShowOnDisabled="True"></Button>
             <Button Grid.Column="1" Content="{Binding Source={StaticResource Lang}, XPath=h5}" HorizontalAlignment="Right"
                     Name="Clear" Click="Clear_Click"></Button>
         </Grid>

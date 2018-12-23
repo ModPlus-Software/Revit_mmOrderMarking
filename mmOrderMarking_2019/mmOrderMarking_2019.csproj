@@ -17,7 +17,7 @@
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
-    <OutputPath>..\..\..\..\..\..\..\ModPlus\Functions\Revit\mmOrderMarking\</OutputPath>
+    <OutputPath>bin\Debug\</OutputPath>
     <DefineConstants>TRACE;DEBUG;R2019</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -63,6 +63,12 @@
   <ItemGroup>
     <Compile Include="..\mmOrderMarking_2015\Command.cs">
       <Link>Command.cs</Link>
+    </Compile>
+    <Compile Include="..\mmOrderMarking_2015\Enums\LocationOrder.cs">
+      <Link>Enums\LocationOrder.cs</Link>
+    </Compile>
+    <Compile Include="..\mmordermarking_2015\enums\OrderDirection.cs">
+      <Link>Enums\OrderDirection.cs</Link>
     </Compile>
     <Compile Include="..\mmOrderMarking_2015\Properties\AssemblyInfoCommon.cs">
       <Link>Properties\AssemblyInfoCommon.cs</Link>

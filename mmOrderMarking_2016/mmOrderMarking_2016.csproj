@@ -64,6 +64,12 @@
     <Compile Include="..\mmOrderMarking_2015\Command.cs">
       <Link>Command.cs</Link>
     </Compile>
+    <Compile Include="..\mmOrderMarking_2015\Enums\LocationOrder.cs">
+      <Link>Enums\LocationOrder.cs</Link>
+    </Compile>
+    <Compile Include="..\mmOrderMarking_2015\Enums\OrderDirection.cs">
+      <Link>Enums\OrderDirection.cs</Link>
+    </Compile>
     <Compile Include="..\mmOrderMarking_2015\Properties\AssemblyInfoCommon.cs">
       <Link>Properties\AssemblyInfoCommon.cs</Link>
     </Compile>

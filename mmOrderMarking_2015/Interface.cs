@@ -28,7 +28,7 @@
 
         public bool CanAddToRibbon => true;
 
-        public string FullDescription => "При работе на виде, не являющимся спецификацией, Функция добавляет нумерованную марку в порядке создания элементов. При работе в спецификации Функция добавляет нумерованную марку в порядке расположения элементов в спецификации (с учетом сортировки). Имеется возможность задавать префикс и суффикс для марки";
+        public string FullDescription => string.Empty;
 
         public string ToolTipHelpImage => string.Empty;
 
