@@ -22,7 +22,7 @@
 
         public string Description => "Добавление нумерации в марку элементов с возможностью маркировки в спецификации";
 
-        public string Author => "Маркевич Максим";
+        public string Author => "Пекшев Александр aka Modis";
 
         public string Price => "0";
 

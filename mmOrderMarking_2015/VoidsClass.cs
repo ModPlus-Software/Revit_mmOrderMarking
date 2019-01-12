@@ -46,11 +46,33 @@
                     }
                     else
                     {
-                        List<Element> pickedElements = uiDoc.Selection.
-                            PickElementsByRectangle(Language.GetItem(LangItem, "m1")).ToList();
-                        sortElements = locationOrder == LocationOrder.Creation
-                            ? pickedElements.ToList()
-                            : GetSortedElementsFromSelection(doc, pickedElements, locationOrder);
+                        var elementIds = uiDoc.Selection.GetElementIds();
+                        if (elementIds.Any())
+                        {
+                            List<Element> selectedElements = new List<Element>();
+                            foreach (ElementId elementId in elementIds)
+                            {
+                                selectedElements.Add(doc.GetElement(elementId));
+                            }
+                            sortElements = locationOrder == LocationOrder.Creation
+                                ? selectedElements.ToList()
+                                : GetSortedElementsFromSelection(doc, selectedElements, locationOrder);
+                        }
+                        else
+                        {
+                            try
+                            {
+                                List<Element> pickedElements =
+                                    uiDoc.Selection.PickElementsByRectangle(Language.GetItem(LangItem, "m1")).ToList();
+                                sortElements = locationOrder == LocationOrder.Creation
+                                    ? pickedElements.ToList()
+                                    : GetSortedElementsFromSelection(doc, pickedElements, locationOrder);
+                            }
+                            catch (Autodesk.Revit.Exceptions.OperationCanceledException)
+                            {
+                                // ignore
+                            }
+                        }
                     }
 
                     for (var i = 0; i < sortElements.Count; i++)
@@ -97,10 +119,27 @@
                     }
                     else
                     {
-                        IList<Element> selectedElements =
-                            uiDoc.Selection.PickElementsByRectangle
-                            (Language.GetItem(LangItem, "m1"));
-                        listElements = selectedElements.ToList();
+                        var elementIds = uiDoc.Selection.GetElementIds();
+                        if (elementIds.Any())
+                        {
+                            foreach (ElementId elementId in elementIds)
+                            {
+                                listElements.Add(doc.GetElement(elementId));
+                            }
+                        }
+                        else
+                        {
+                            try
+                            {
+                                IList<Element> selectedElements =
+                                    uiDoc.Selection.PickElementsByRectangle(Language.GetItem(LangItem, "m1"));
+                                listElements = selectedElements.ToList();
+                            }
+                            catch (Autodesk.Revit.Exceptions.OperationCanceledException)
+                            {
+                                // ignore
+                            }
+                        }
                     }
 
                     foreach (Element pickedElement in listElements)
