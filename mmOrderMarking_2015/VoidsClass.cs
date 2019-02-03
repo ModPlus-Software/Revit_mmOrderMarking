@@ -192,9 +192,11 @@
                     {
                         try
                         {
-                            if (viewSchedule.Definition.GetField(id).GetSchedulableField() == sf)
+                            ScheduleField scheduleField = viewSchedule.Definition.GetField(id);
+                            if (scheduleField.GetSchedulableField() == sf)
                             {
                                 fieldAlreadyAdded = true;
+                                scheduleField.IsHidden = false;
                                 break;
                             }
                         }
