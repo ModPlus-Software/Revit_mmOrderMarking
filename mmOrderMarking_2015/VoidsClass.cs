@@ -41,7 +41,10 @@
                                 .Where(e => e.LookupParameter(parameterName) != null)
                                 .ToList();
 
-                            sortElements = GetSortedElementsFromSchedule(viewSchedule, elements);
+                            if (viewSchedule.Definition.IsItemized)
+                                sortElements = GetSortedElementsFromItemizedSchedule(viewSchedule, elements);
+                            else
+                                sortElements = GetSortedElementsFromNotItemizedSchedule(viewSchedule, elements);
                         }
                     }
                     else
@@ -157,7 +160,13 @@
             }
         }
 
-        private static List<Element> GetSortedElementsFromSchedule(ViewSchedule viewSchedule, List<Element> elements)
+        /// <summary>
+        /// Получение сортированных элементов из спецификации с установленной галочкой "Для каждого экземпляра"
+        /// </summary>
+        /// <param name="viewSchedule">Вид спецификации</param>
+        /// <param name="elements">Элементы, полученные с этого вида</param>
+        /// <returns></returns>
+        private static List<Element> GetSortedElementsFromItemizedSchedule(ViewSchedule viewSchedule, List<Element> elements)
         {
             List<Element> sortedElements = new List<Element>();
 
@@ -212,6 +221,9 @@
                     }
                 }
 
+                viewSchedule.RefreshData();
+                viewSchedule.Document.Regenerate();
+
                 // Ну и сама магия - просто читаем получившуюся спецификацию по ячейкам и получаем
                 // элементы уже в том порядке, в котором мы их видим в спецификации
                 TableSectionData sectionData = viewSchedule.GetTableData().GetSectionData(SectionType.Body);
@@ -242,6 +254,103 @@
 
                 // Откатываем транзакцию
                 transaction.RollBack();
+            }
+
+            return sortedElements;
+        }
+
+        /// <summary>
+        /// Получение сортированных элементов из спецификации с не установленной галочкой "Для каждого экземпляра"
+        /// </summary>
+        /// <param name="viewSchedule">Вид спецификации</param>
+        /// <param name="elements">Элементы, полученные с этого вида</param>
+        /// <returns></returns>
+        private static List<Element> GetSortedElementsFromNotItemizedSchedule(ViewSchedule viewSchedule, List<Element> elements)
+        {
+            List<Element> sortedElements = new List<Element>();
+
+            using (SubTransaction transaction = new SubTransaction(viewSchedule.Document))
+            {
+                transaction.Start();
+
+                // Разделитель
+                var separator = "$HelpIntegerValue=";
+
+                // Сначала мне нужно добавить (или проверить) поле "Комментарии" и запомнить заголовок
+                // К спецификации добавляем поле. Код из справки, за исключением try {} catch{}
+                IList<SchedulableField> schedulableFields = viewSchedule.Definition.GetSchedulableFields();
+
+                var columnHeader = string.Empty;
+
+                foreach (SchedulableField sf in schedulableFields)
+                {
+                    if (sf.FieldType != ScheduleFieldType.Instance)
+                        continue;
+                    if (sf.ParameterId.IntegerValue != (int)BuiltInParameter.ALL_MODEL_INSTANCE_COMMENTS)
+                        continue;
+
+                    bool fieldAlreadyAdded = false;
+                    //Get all schedule field ids
+                    IList<ScheduleFieldId> ids = viewSchedule.Definition.GetFieldOrder();
+                    foreach (ScheduleFieldId id in ids)
+                    {
+                        try
+                        {
+                            ScheduleField scheduleField = viewSchedule.Definition.GetField(id);
+                            if (scheduleField.GetSchedulableField() == sf)
+                            {
+                                fieldAlreadyAdded = true;
+                                scheduleField.IsHidden = false;
+                                if (string.IsNullOrEmpty(scheduleField.ColumnHeading))
+                                    scheduleField.ColumnHeading = "CommentsColumn";
+                                columnHeader = scheduleField.ColumnHeading;
+                                break;
+                            }
+                        }
+                        catch
+                        {
+                            // Тут бывают какие-то ошибки, но мне они не важны, поэтому проще их "проглатить"
+                        }
+                    }
+
+                    if (fieldAlreadyAdded == false)
+                    {
+                        var addedField = viewSchedule.Definition.AddField(sf);
+                        columnHeader = addedField.ColumnHeading;
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(columnHeader))
+                {
+                    TableSectionData sectionData = viewSchedule.GetTableData().GetSectionData(SectionType.Body);
+                    var column = -1;
+                    var helpInteger = 1;
+                    for (int r = sectionData.FirstRowNumber; r <= sectionData.LastRowNumber; r++)
+                    {
+                        if (column == -1)
+                        {
+                            for (int c = sectionData.FirstColumnNumber; c <= sectionData.LastColumnNumber; c++)
+                            {
+                                var cellValue = viewSchedule.GetCellText(SectionType.Body, r, c);
+                                if (cellValue == columnHeader)
+                                {
+                                    column = c;
+                                    break;
+                                }
+                            }
+                        }
+                        else
+                        {
+                            var cellValue = viewSchedule.GetCellText(SectionType.Body, r, column);
+                            //sectionData.SetCellText(r, column, cellValue + separator + helpInteger);
+                            helpInteger++;
+                        }
+                    }
+                }
+
+                // Откатываю транзакцию
+                transaction.Commit();
+                //transaction.RollBack();
             }
 
             return sortedElements;
