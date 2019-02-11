@@ -8,6 +8,7 @@
     using Autodesk.Revit.UI;
     using Enums;
     using ModPlusAPI;
+    using ModPlusAPI.Annotations;
     using ModPlusAPI.Windows;
 
     public static class VoidsClass
@@ -41,10 +42,10 @@
                                 .Where(e => e.LookupParameter(parameterName) != null)
                                 .ToList();
 
-                            if (viewSchedule.Definition.IsItemized)
+                            ////if (viewSchedule.Definition.IsItemized)
                                 sortElements = GetSortedElementsFromItemizedSchedule(viewSchedule, elements);
-                            else
-                                sortElements = GetSortedElementsFromNotItemizedSchedule(viewSchedule, elements);
+                            ////else
+                            ////    sortElements = GetSortedElementsFromNotItemizedSchedule(viewSchedule, elements);
                         }
                     }
                     else
@@ -170,6 +171,10 @@
         {
             List<Element> sortedElements = new List<Element>();
 
+            var builtInParameter = GetBuiltInParameterForElements(elements);
+            if (builtInParameter == null)
+                return sortedElements;
+
             using (SubTransaction transaction = new SubTransaction(viewSchedule.Document))
             {
                 transaction.Start();
@@ -180,7 +185,7 @@
                 // Записываем Id всех элементов в параметр "Комментарий"
                 elements.ForEach(e =>
                 {
-                    var parameter = e.get_Parameter(BuiltInParameter.ALL_MODEL_INSTANCE_COMMENTS);
+                    var parameter = e.get_Parameter(builtInParameter.Value);
                     parameter.Set(parameter.AsString() + separator + e.Id.IntegerValue);
                 });
 
@@ -191,7 +196,7 @@
                 {
                     if (sf.FieldType != ScheduleFieldType.Instance)
                         continue;
-                    if (sf.ParameterId.IntegerValue != (int)BuiltInParameter.ALL_MODEL_INSTANCE_COMMENTS)
+                    if (sf.ParameterId.IntegerValue != (int)builtInParameter.Value)
                         continue;
 
                     bool fieldAlreadyAdded = false;
@@ -259,6 +264,34 @@
             return sortedElements;
         }
 
+        [CanBeNull]
+        private static BuiltInParameter? GetBuiltInParameterForElements(List<Element> elements)
+        {
+            BuiltInParameter? returnedBuiltInParameter = null;
+
+            foreach (BuiltInParameter builtInParameter in AllowableBuiltInParameter)
+            {
+                foreach (Element element in elements)
+                {
+                    if (element.get_Parameter(builtInParameter) == null)
+                    {
+                        returnedBuiltInParameter = null;
+                        break;
+                    }
+
+                    returnedBuiltInParameter = builtInParameter;
+                }
+            }
+
+            return returnedBuiltInParameter;
+        }
+
+        private static List<BuiltInParameter> AllowableBuiltInParameter = new List<BuiltInParameter>
+        {
+            BuiltInParameter.ALL_MODEL_INSTANCE_COMMENTS,
+            BuiltInParameter.SHEET_NAME
+        };
+
         /// <summary>
         /// Получение сортированных элементов из спецификации с не установленной галочкой "Для каждого экземпляра"
         /// </summary>
@@ -309,7 +342,7 @@
                         }
                         catch
                         {
-                            // Тут бывают какие-то ошибки, но мне они не важны, поэтому проще их "проглатить"
+                            // Тут бывают какие-то ошибки, но мне они не важны, поэтому проще их "проглотить"
                         }
                     }
 
@@ -319,6 +352,10 @@
                         columnHeader = addedField.ColumnHeading;
                     }
                 }
+
+                viewSchedule.RefreshData();
+                viewSchedule.Document.Regenerate();
+
 
                 if (!string.IsNullOrEmpty(columnHeader))
                 {
@@ -342,6 +379,11 @@
                         else
                         {
                             var cellValue = viewSchedule.GetCellText(SectionType.Body, r, column);
+                            Debug.Print("Cell value: " + cellValue);
+                            TableCellCalculatedValueData calculatedValue = sectionData.GetCellCalculatedValue(r, column);
+                            Debug.Print("Calculated name: " + calculatedValue?.GetName()); 
+                            
+                            
                             //sectionData.SetCellText(r, column, cellValue + separator + helpInteger);
                             helpInteger++;
                         }

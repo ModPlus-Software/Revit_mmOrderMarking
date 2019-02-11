@@ -33,7 +33,6 @@
                     .WhereElementIsNotElementType().ToList();
                 foreach (SchedulableField schedulableField in viewSchedule.Definition.GetSchedulableFields())
                 {
-                    Debug.Print(schedulableField.ParameterId.IntegerValue.ToString());
                     if (schedulableField.FieldType == ScheduleFieldType.Instance)
                     {
                         var parameter = elements.First().get_Parameter((BuiltInParameter)schedulableField.ParameterId.IntegerValue);
