@@ -92,10 +92,8 @@
                         }
                     }
                 }
-                if (TransactionStatus.Committed != transaction.Commit())
-                {
-                    transaction.RollBack();
-                }
+
+                transaction.Commit();
             }
         }
 
@@ -154,10 +152,8 @@
                         }
                     }
                 }
-                if (TransactionStatus.Committed != transaction.Commit())
-                {
-                    transaction.RollBack();
-                }
+
+                transaction.Commit();
             }
         }
 
