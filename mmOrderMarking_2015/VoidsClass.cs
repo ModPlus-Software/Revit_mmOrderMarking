@@ -277,12 +277,15 @@
 
                     returnedBuiltInParameter = builtInParameter;
                 }
+
+                if (returnedBuiltInParameter != null)
+                    break;
             }
 
             return returnedBuiltInParameter;
         }
 
-        private static List<BuiltInParameter> AllowableBuiltInParameter = new List<BuiltInParameter>
+        private static readonly List<BuiltInParameter> AllowableBuiltInParameter = new List<BuiltInParameter>
         {
             BuiltInParameter.ALL_MODEL_INSTANCE_COMMENTS,
             BuiltInParameter.SHEET_NAME
