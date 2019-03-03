@@ -21,7 +21,7 @@
         public WinScheduleAutoNum(ExternalCommandData commandData)
         {
             InitializeComponent();
-            Title = ModPlusAPI.Language.GetFunctionLocalName(LangItem, new Interface().LName);
+            Title = ModPlusAPI.Language.GetFunctionLocalName(LangItem, new ModPlusConnector().LName);
             _commandData = commandData;
             if (commandData.View is ViewSchedule viewSchedule)
             {

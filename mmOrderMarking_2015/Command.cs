@@ -16,7 +16,7 @@
 
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
-            ModPlusAPI.Statistic.SendCommandStarting(new Interface());
+            ModPlusAPI.Statistic.SendCommandStarting(new ModPlusConnector());
 
             if (commandData.View is ViewSchedule)
             {
