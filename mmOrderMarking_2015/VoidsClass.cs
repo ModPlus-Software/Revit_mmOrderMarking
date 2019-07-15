@@ -2,7 +2,6 @@
 {
     using System;
     using System.Collections.Generic;
-    using System.Diagnostics;
     using System.Linq;
     using Autodesk.Revit.DB;
     using Autodesk.Revit.UI;
@@ -42,10 +41,32 @@
                                 .Where(e => e.LookupParameter(parameterName) != null)
                                 .ToList();
 
-                            ////if (viewSchedule.Definition.IsItemized)
+                            // Если стоит галочка "Для каждого экземпляра", то получаем сортированный список и нумерация
+                            // происходит далее. Иначе получаем сортированный список по строкам и сразу нумеруем
+                            if (viewSchedule.Definition.IsItemized)
+                            {
                                 sortElements = GetSortedElementsFromItemizedSchedule(viewSchedule, elements);
-                            ////else
-                            ////    sortElements = GetSortedElementsFromNotItemizedSchedule(viewSchedule, elements);
+                            }
+                            else
+                            {
+                                var sortedElementsByRows = GetSortedElementsFromNotItemizedSchedule(viewSchedule, elements)
+                                    .Where(e => e.Elements.Count > 0)
+                                    .ToList();
+                                for (var i = 0; i < sortedElementsByRows.Count; i++)
+                                {
+                                    sortedElementsByRows[i].Elements.ForEach(e =>
+                                    {
+                                        if (e.LookupParameter(parameterName) is Parameter parameter)
+                                        {
+                                            var markValue = orderDirection == OrderDirection.Ascending
+                                                ? startValue + i
+                                                : sortElements.Count + startValue - i - 1;
+
+                                            parameter.Set(prefix + markValue + suffix);
+                                        }
+                                    });
+                                }
+                            }
                         }
                     }
                     else
@@ -186,44 +207,7 @@
                 });
 
                 // К спецификации добавляем поле. Код из справки, за исключением try {} catch{}
-                IList<SchedulableField> schedulableFields = viewSchedule.Definition.GetSchedulableFields();
-
-                foreach (SchedulableField sf in schedulableFields)
-                {
-                    if (sf.FieldType != ScheduleFieldType.Instance)
-                        continue;
-                    if (sf.ParameterId.IntegerValue != (int)builtInParameter.Value)
-                        continue;
-
-                    bool fieldAlreadyAdded = false;
-                    //Get all schedule field ids
-                    IList<ScheduleFieldId> ids = viewSchedule.Definition.GetFieldOrder();
-                    foreach (ScheduleFieldId id in ids)
-                    {
-                        try
-                        {
-                            ScheduleField scheduleField = viewSchedule.Definition.GetField(id);
-                            if (scheduleField.GetSchedulableField() == sf)
-                            {
-                                fieldAlreadyAdded = true;
-                                scheduleField.IsHidden = false;
-                                break;
-                            }
-                        }
-                        catch
-                        {
-                            // Тут бывают какие-то ошибки, но мне они не важны, поэтому проще их "проглатить"
-                        }
-                    }
-
-                    if (fieldAlreadyAdded == false)
-                    {
-                        viewSchedule.Definition.AddField(sf);
-                    }
-                }
-
-                viewSchedule.RefreshData();
-                viewSchedule.Document.Regenerate();
+                AddFieldToSchedule(viewSchedule, builtInParameter.Value, out _);
 
                 // Ну и сама магия - просто читаем получившуюся спецификацию по ячейкам и получаем
                 // элементы уже в том порядке, в котором мы их видим в спецификации
@@ -260,6 +244,144 @@
             return sortedElements;
         }
 
+        /// <summary>
+        /// Получение сортированных элементов из спецификации с не установленной галочкой "Для каждого экземпляра"
+        /// </summary>
+        /// <param name="viewSchedule">Вид спецификации</param>
+        /// <param name="elements">Элементы, полученные с этого вида</param>
+        /// <returns></returns>
+        private static List<ElInRow> GetSortedElementsFromNotItemizedSchedule(ViewSchedule viewSchedule, List<Element> elements)
+        {
+            List<ElInRow> sortedElements = new List<ElInRow>();
+
+            var builtInParameter = GetBuiltInParameterForElements(elements);
+            if (builtInParameter == null)
+                return sortedElements;
+
+            // запоминаю начальные значения в параметре
+            Dictionary<Element, string> cachedParameterValues = new Dictionary<Element, string>();
+            elements.ForEach(e =>
+            {
+                var parameter = e.get_Parameter(builtInParameter.Value);
+                cachedParameterValues.Add(e, parameter.AsString());
+            });
+
+            var signalValue = "$Filled$";
+            var columnNumber = -1;
+            var startRowNumber = -1;
+
+            bool fieldAlreadyAdded = false;
+
+            using (SubTransaction transaction = new SubTransaction(viewSchedule.Document))
+            {
+                transaction.Start();
+
+                // всем элементам записываем в комментарий сигнальное значение в виде двух специальных символов
+                elements.ForEach(e =>
+                {
+                    var parameter = e.get_Parameter(builtInParameter.Value);
+                    parameter.Set(signalValue);
+                });
+
+                // К спецификации добавляем поле. Код из справки, за исключением try {} catch{}
+                AddFieldToSchedule(viewSchedule, builtInParameter.Value, out fieldAlreadyAdded);
+
+                // в зависимости от количества строк в таблице сразу заполняю коллекцию "болванками" и
+                // нахожу номер нужной колонки и первой строки
+                TableSectionData sectionData = viewSchedule.GetTableData().GetSectionData(SectionType.Body);
+                int rowNumber = 0;
+                for (int r = sectionData.FirstRowNumber; r <= sectionData.LastRowNumber; r++)
+                {
+                    for (int c = sectionData.FirstColumnNumber; c <= sectionData.LastColumnNumber; c++)
+                    {
+                        var cellValue = viewSchedule.GetCellText(SectionType.Body, r, c);
+                        if (cellValue.Contains(signalValue))
+                        {
+                            rowNumber++;
+                            sortedElements.Add(new ElInRow(rowNumber));
+
+                            if (startRowNumber == -1)
+                                startRowNumber = r;
+                            if (columnNumber == -1)
+                                columnNumber = c;
+
+                            break;
+                        }
+                    }
+                }
+
+
+                transaction.Commit();
+            }
+
+            // теперь выполняю итерацию по всем элементам
+            for (var index = 0; index < elements.Count; index++)
+            {
+                Element element = elements[index];
+                using (SubTransaction transaction = new SubTransaction(viewSchedule.Document))
+                {
+                    transaction.Start();
+
+                    if (index != 0)
+                    {
+                        var parameter = elements[index - 1].get_Parameter(builtInParameter.Value);
+                        // возвращаю элементу значение в параметр
+                        parameter.Set(signalValue);
+                    }
+
+                    {
+                        // элементу стираю второй символ. Первый символ нужен, чтобы идентифицировать ячейку
+                        var parameter = element.get_Parameter(builtInParameter.Value);
+                        parameter.Set(string.Empty);
+                    }
+
+                    // регенерирую таблицу, чтобы обновить представление
+                    viewSchedule.RefreshData();
+                    viewSchedule.Document.Regenerate();
+
+                    transaction.Commit();
+                }
+
+
+
+                // теперь смотрю какая ячейка погасла
+                TableSectionData sectionData = viewSchedule.GetTableData().GetSectionData(SectionType.Body);
+                var rowNumber = 0;
+                for (int r = startRowNumber; r <= sectionData.LastRowNumber; r++)
+                {
+                    rowNumber++;
+                    var cellValue = viewSchedule.GetCellText(SectionType.Body, r, columnNumber);
+                    if (string.IsNullOrEmpty(cellValue))
+                    {
+                        var elInRow = sortedElements.FirstOrDefault(e => e.RowNumber == rowNumber);
+                        elInRow?.Elements.Add(element);
+
+                        break;
+                    }
+                }
+            }
+
+            // восстанавливаю начальные значения параметров
+            using (SubTransaction transaction = new SubTransaction(viewSchedule.Document))
+            {
+                transaction.Start();
+
+                foreach (var pair in cachedParameterValues)
+                {
+                    var parameter = pair.Key.get_Parameter(builtInParameter.Value);
+                    parameter.Set(pair.Value);
+                }
+
+                // если поле не было добавлено изначально, то нужно его удалить
+                if (!fieldAlreadyAdded) 
+                    RemoveFieldFromSchedule(viewSchedule, builtInParameter.Value);
+
+                transaction.Commit();
+            }
+
+            return sortedElements;
+        }
+
         [CanBeNull]
         private static BuiltInParameter? GetBuiltInParameterForElements(List<Element> elements)
         {
@@ -291,110 +413,82 @@
             BuiltInParameter.SHEET_NAME
         };
 
-        /// <summary>
-        /// Получение сортированных элементов из спецификации с не установленной галочкой "Для каждого экземпляра"
-        /// </summary>
-        /// <param name="viewSchedule">Вид спецификации</param>
-        /// <param name="elements">Элементы, полученные с этого вида</param>
-        /// <returns></returns>
-        private static List<Element> GetSortedElementsFromNotItemizedSchedule(ViewSchedule viewSchedule, List<Element> elements)
+        private static void AddFieldToSchedule(ViewSchedule viewSchedule, BuiltInParameter builtInParameter, out bool fieldAlreadyAdded)
         {
-            List<Element> sortedElements = new List<Element>();
+            IList<SchedulableField> schedulableFields = viewSchedule.Definition.GetSchedulableFields();
 
-            using (SubTransaction transaction = new SubTransaction(viewSchedule.Document))
+            fieldAlreadyAdded = false;
+
+            foreach (SchedulableField sf in schedulableFields)
             {
-                transaction.Start();
+                if (sf.FieldType != ScheduleFieldType.Instance)
+                    continue;
+                if (sf.ParameterId.IntegerValue != (int)builtInParameter)
+                    continue;
 
-                // Разделитель
-                var separator = "$HelpIntegerValue=";
-
-                // Сначала мне нужно добавить (или проверить) поле "Комментарии" и запомнить заголовок
-                // К спецификации добавляем поле. Код из справки, за исключением try {} catch{}
-                IList<SchedulableField> schedulableFields = viewSchedule.Definition.GetSchedulableFields();
-
-                var columnHeader = string.Empty;
-
-                foreach (SchedulableField sf in schedulableFields)
+                //Get all schedule field ids
+                IList<ScheduleFieldId> ids = viewSchedule.Definition.GetFieldOrder();
+                foreach (ScheduleFieldId id in ids)
                 {
-                    if (sf.FieldType != ScheduleFieldType.Instance)
-                        continue;
-                    if (sf.ParameterId.IntegerValue != (int)BuiltInParameter.ALL_MODEL_INSTANCE_COMMENTS)
-                        continue;
-
-                    bool fieldAlreadyAdded = false;
-                    //Get all schedule field ids
-                    IList<ScheduleFieldId> ids = viewSchedule.Definition.GetFieldOrder();
-                    foreach (ScheduleFieldId id in ids)
+                    try
                     {
-                        try
+                        ScheduleField scheduleField = viewSchedule.Definition.GetField(id);
+                        if (scheduleField.GetSchedulableField() == sf)
                         {
-                            ScheduleField scheduleField = viewSchedule.Definition.GetField(id);
-                            if (scheduleField.GetSchedulableField() == sf)
-                            {
-                                fieldAlreadyAdded = true;
-                                scheduleField.IsHidden = false;
-                                if (string.IsNullOrEmpty(scheduleField.ColumnHeading))
-                                    scheduleField.ColumnHeading = "CommentsColumn";
-                                columnHeader = scheduleField.ColumnHeading;
-                                break;
-                            }
-                        }
-                        catch
-                        {
-                            // Тут бывают какие-то ошибки, но мне они не важны, поэтому проще их "проглотить"
+                            fieldAlreadyAdded = true;
+                            scheduleField.IsHidden = false;
+                            break;
                         }
                     }
-
-                    if (fieldAlreadyAdded == false)
+                    catch
                     {
-                        var addedField = viewSchedule.Definition.AddField(sf);
-                        columnHeader = addedField.ColumnHeading;
+                        // Тут бывают какие-то ошибки, но мне они не важны, поэтому проще их "проглотить"
                     }
                 }
 
-                viewSchedule.RefreshData();
-                viewSchedule.Document.Regenerate();
-
-
-                if (!string.IsNullOrEmpty(columnHeader))
+                if (fieldAlreadyAdded == false)
                 {
-                    TableSectionData sectionData = viewSchedule.GetTableData().GetSectionData(SectionType.Body);
-                    var column = -1;
-                    var helpInteger = 1;
-                    for (int r = sectionData.FirstRowNumber; r <= sectionData.LastRowNumber; r++)
-                    {
-                        if (column == -1)
-                        {
-                            for (int c = sectionData.FirstColumnNumber; c <= sectionData.LastColumnNumber; c++)
-                            {
-                                var cellValue = viewSchedule.GetCellText(SectionType.Body, r, c);
-                                if (cellValue == columnHeader)
-                                {
-                                    column = c;
-                                    break;
-                                }
-                            }
-                        }
-                        else
-                        {
-                            var cellValue = viewSchedule.GetCellText(SectionType.Body, r, column);
-                            Debug.Print("Cell value: " + cellValue);
-                            TableCellCalculatedValueData calculatedValue = sectionData.GetCellCalculatedValue(r, column);
-                            Debug.Print("Calculated name: " + calculatedValue?.GetName()); 
-                            
-                            
-                            //sectionData.SetCellText(r, column, cellValue + separator + helpInteger);
-                            helpInteger++;
-                        }
-                    }
+                    viewSchedule.Definition.AddField(sf);
                 }
-
-                // Откатываю транзакцию
-                transaction.Commit();
-                //transaction.RollBack();
             }
 
-            return sortedElements;
+            viewSchedule.RefreshData();
+            viewSchedule.Document.Regenerate();
+        }
+
+        private static void RemoveFieldFromSchedule(ViewSchedule viewSchedule, BuiltInParameter builtInParameter)
+        {
+            IList<SchedulableField> schedulableFields = viewSchedule.Definition.GetSchedulableFields();
+            
+            foreach (SchedulableField sf in schedulableFields)
+            {
+                if (sf.FieldType != ScheduleFieldType.Instance)
+                    continue;
+                if (sf.ParameterId.IntegerValue != (int)builtInParameter)
+                    continue;
+
+                //Get all schedule field ids
+                IList<ScheduleFieldId> ids = viewSchedule.Definition.GetFieldOrder();
+                foreach (ScheduleFieldId id in ids)
+                {
+                    try
+                    {
+                        ScheduleField scheduleField = viewSchedule.Definition.GetField(id);
+                        if (scheduleField.GetSchedulableField() == sf)
+                        {
+                            viewSchedule.Definition.RemoveField(scheduleField.FieldId);
+                            break;
+                        }
+                    }
+                    catch
+                    {
+                        // Тут бывают какие-то ошибки, но мне они не важны, поэтому проще их "проглотить"
+                    }
+                }
+            }
+
+            viewSchedule.RefreshData();
+            viewSchedule.Document.Regenerate();
         }
 
         private static List<Element> GetSortedElementsFromSelection(Document doc, List<Element> elements, LocationOrder locationOrder)
@@ -475,6 +569,21 @@
             }
 
             return sortedElements;
+        }
+
+        /// <summary>
+        /// Объект, содержащий информацию о том, какие элементе в какой строке находятся
+        /// </summary>
+        internal class ElInRow
+        {
+            public ElInRow(int rowNumber)
+            {
+                RowNumber = rowNumber;
+            }
+
+            public int RowNumber { get; }
+
+            public List<Element> Elements { get; } = new List<Element>();
         }
     }
 }

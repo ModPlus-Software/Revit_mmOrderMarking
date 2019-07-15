@@ -45,13 +45,6 @@
                 if (elements.First().get_Parameter(BuiltInParameter.ALL_MODEL_MARK) != null)
                     CbParameter.SelectedItem = LabelUtils.GetLabelFor(BuiltInParameter.ALL_MODEL_MARK);
                 else CbParameter.SelectedIndex = 0;
-
-                // disable button
-                if (!viewSchedule.Definition.IsItemized)
-                {
-                    Do.IsEnabled = false;
-                    Do.ToolTip = ModPlusAPI.Language.GetItem(LangItem, "t1");
-                }
             }
             else
             {
