@@ -2,8 +2,10 @@
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics;
     using System.Linq;
     using Autodesk.Revit.DB;
+    using Autodesk.Revit.DB.Events;
     using Autodesk.Revit.UI;
     using Enums;
     using ModPlusAPI;
@@ -27,94 +29,164 @@
             UIDocument uiDoc = uiApp.ActiveUIDocument;
             Document doc = uiDoc.Document;
 
-            using (Transaction transaction = new Transaction(doc))
+            uiApp.Application.FailuresProcessing += ApplicationOnFailuresProcessing;
+
+            try
             {
-                if (transaction.Start("mmOrderMarking") == TransactionStatus.Started)
+                List<ElInGroup> elementsInGroups = new List<ElInGroup>();
+
+                using (Transaction transaction = new Transaction(doc))
                 {
-                    View currentView = uiDoc.ActiveView;
-                    List<Element> sortElements = new List<Element>();
-                    if (currentView.ViewType == ViewType.Schedule)
+                    if (transaction.Start("mmOrderMarking") == TransactionStatus.Started)
                     {
-                        if (commandData.View is ViewSchedule viewSchedule)
+                        View currentView = uiDoc.ActiveView;
+                        List<Element> sortElements = new List<Element>();
+                        if (currentView.ViewType == ViewType.Schedule)
                         {
-                            var elements = new FilteredElementCollector(doc, viewSchedule.Id)
-                                .Where(e => e.LookupParameter(parameterName) != null)
-                                .ToList();
-
-                            // Если стоит галочка "Для каждого экземпляра", то получаем сортированный список и нумерация
-                            // происходит далее. Иначе получаем сортированный список по строкам и сразу нумеруем
-                            if (viewSchedule.Definition.IsItemized)
+                            if (commandData.View is ViewSchedule viewSchedule)
                             {
-                                sortElements = GetSortedElementsFromItemizedSchedule(viewSchedule, elements);
-                            }
-                            else
-                            {
-                                var sortedElementsByRows = GetSortedElementsFromNotItemizedSchedule(viewSchedule, elements)
-                                    .Where(e => e.Elements.Count > 0)
+                                var elements = new FilteredElementCollector(doc, viewSchedule.Id)
+                                    .Where(e => e.LookupParameter(parameterName) != null)
                                     .ToList();
-                                for (var i = 0; i < sortedElementsByRows.Count; i++)
-                                {
-                                    sortedElementsByRows[i].Elements.ForEach(e =>
-                                    {
-                                        if (e.LookupParameter(parameterName) is Parameter parameter)
-                                        {
-                                            var markValue = orderDirection == OrderDirection.Ascending
-                                                ? startValue + i
-                                                : sortElements.Count + startValue - i - 1;
 
-                                            parameter.Set(prefix + markValue + suffix);
+                                // Если стоит галочка "Для каждого экземпляра", то получаем сортированный список и нумерация
+                                // происходит далее. Иначе получаем сортированный список по строкам и сразу нумеруем
+                                if (viewSchedule.Definition.IsItemized)
+                                {
+                                    sortElements = GetSortedElementsFromItemizedSchedule(viewSchedule, elements);
+                                }
+                                else
+                                {
+                                    var sortedElementsByRows = GetSortedElementsFromNotItemizedSchedule(viewSchedule, elements)
+                                        .Where(e => e.Elements.Count > 0)
+                                        .ToList();
+                                    if (sortedElementsByRows.Any())
+                                    {
+                                        for (var i = 0; i < sortedElementsByRows.Count; i++)
+                                        {
+                                            sortedElementsByRows[i].Elements.ForEach(e =>
+                                            {
+                                                var markValue = orderDirection == OrderDirection.Ascending
+                                                    ? startValue + i
+                                                    : sortElements.Count + startValue - i;
+                                                var newMark = prefix + markValue + suffix;
+
+                                                if (e.GroupId != ElementId.InvalidElementId)
+                                                {
+                                                    var elInGroup = elementsInGroups.FirstOrDefault(g => g.GroupId == e.GroupId.IntegerValue);
+                                                    if (elInGroup == null)
+                                                    {
+                                                        var group = doc.GetElement(e.GroupId) as Group;
+                                                        elInGroup = new ElInGroup(group);
+                                                        elementsInGroups.Add(elInGroup);
+                                                    }
+                                                    elInGroup.Elements.Add(e, newMark);
+                                                }
+                                                else if (e.LookupParameter(parameterName) is Parameter parameter)
+                                                {
+                                                    parameter.Set(newMark);
+                                                }
+                                            });
                                         }
-                                    });
+                                    }
                                 }
                             }
                         }
-                    }
-                    else
-                    {
-                        var elementIds = uiDoc.Selection.GetElementIds();
-                        if (elementIds.Any())
-                        {
-                            List<Element> selectedElements = new List<Element>();
-                            foreach (ElementId elementId in elementIds)
-                            {
-                                selectedElements.Add(doc.GetElement(elementId));
-                            }
-                            sortElements = locationOrder == LocationOrder.Creation
-                                ? selectedElements.ToList()
-                                : GetSortedElementsFromSelection(doc, selectedElements, locationOrder);
-                        }
                         else
                         {
-                            try
+                            var elementIds = uiDoc.Selection.GetElementIds();
+                            if (elementIds.Any())
                             {
-                                List<Element> pickedElements =
-                                    uiDoc.Selection.PickElementsByRectangle(Language.GetItem(LangItem, "m1")).ToList();
+                                List<Element> selectedElements = new List<Element>();
+                                foreach (ElementId elementId in elementIds)
+                                {
+                                    selectedElements.Add(doc.GetElement(elementId));
+                                }
+
                                 sortElements = locationOrder == LocationOrder.Creation
-                                    ? pickedElements.ToList()
-                                    : GetSortedElementsFromSelection(doc, pickedElements, locationOrder);
+                                    ? selectedElements.ToList()
+                                    : GetSortedElementsFromSelection(doc, selectedElements, locationOrder);
                             }
-                            catch (Autodesk.Revit.Exceptions.OperationCanceledException)
+                            else
                             {
-                                // ignore
+                                try
+                                {
+                                    List<Element> pickedElements =
+                                        uiDoc.Selection.PickElementsByRectangle(Language.GetItem(LangItem, "m1")).ToList();
+                                    sortElements = locationOrder == LocationOrder.Creation
+                                        ? pickedElements.ToList()
+                                        : GetSortedElementsFromSelection(doc, pickedElements, locationOrder);
+                                }
+                                catch (Autodesk.Revit.Exceptions.OperationCanceledException)
+                                {
+                                    // ignore
+                                }
                             }
                         }
-                    }
 
-                    for (var i = 0; i < sortElements.Count; i++)
-                    {
-                        var element = sortElements[i];
-                        if (element.LookupParameter(parameterName) is Parameter parameter)
+                        for (var i = 0; i < sortElements.Count; i++)
                         {
                             var markValue = orderDirection == OrderDirection.Ascending
                                 ? startValue + i
-                                : sortElements.Count + startValue - i - 1;
+                                : sortElements.Count + startValue - i;
+                            var newMark = prefix + markValue + suffix;
 
-                            parameter.Set(prefix + markValue + suffix);
+                            var e = sortElements[i];
+                            if (e.GroupId != ElementId.InvalidElementId)
+                            {
+                                var elInGroup = elementsInGroups.FirstOrDefault(g => g.GroupId == e.GroupId.IntegerValue);
+                                if (elInGroup == null)
+                                {
+                                    var group = doc.GetElement(e.GroupId) as Group;
+                                    elInGroup = new ElInGroup(group);
+                                    elementsInGroups.Add(elInGroup);
+                                }
+                                elInGroup.Elements.Add(e, newMark);
+                            }
+                            else if (e.LookupParameter(parameterName) is Parameter parameter)
+                            {
+                                parameter.Set(newMark);
+                            }
                         }
                     }
+
+                    transaction.Commit();
                 }
 
-                transaction.Commit();
+                if (elementsInGroups.Any())
+                    NumerateInGroups(elementsInGroups, doc, parameterName);
+            }
+            catch (Exception exception)
+            {
+                ExceptionBox.Show(exception);
+            }
+            finally
+            {
+                uiApp.Application.FailuresProcessing += ApplicationOnFailuresProcessing;
+            }
+        }
+
+        private static void ApplicationOnFailuresProcessing(object sender, FailuresProcessingEventArgs e)
+        {
+            var failList = e.GetFailuresAccessor().GetFailureMessages();
+            if (failList.Any())
+            {
+                foreach (FailureMessageAccessor failureMessageAccessor in failList)
+                {
+                    var failureDefinitionId = failureMessageAccessor.GetFailureDefinitionId();
+
+                    // Пропускаю сообщения о дублированных значениях (Одинаковая марка)
+                    if (failureDefinitionId == BuiltInFailures.GeneralFailures.DuplicateValue)
+                    {
+                        e.GetFailuresAccessor().DeleteWarning(failureMessageAccessor);
+                    }
+
+                    // Пропускаю сообщения про группы
+                    if (failureDefinitionId == BuiltInFailures.GroupFailures.AtomViolationWhenOnePlaceInstance)
+                    {
+                        e.GetFailuresAccessor().DeleteWarning(failureMessageAccessor);
+                    }
+                }
             }
         }
 
@@ -175,6 +247,60 @@
                 }
 
                 transaction.Commit();
+            }
+        }
+
+        private static void NumerateInGroups(List<ElInGroup> elementsInGroups, Document doc, string parameterName)
+        {
+            using (TransactionGroup transactionGroup = new TransactionGroup(doc))
+            {
+                transactionGroup.Start();
+
+                foreach (IGrouping<string, ElInGroup> grouping in elementsInGroups.GroupBy(e => e.GroupName))
+                {
+                    List<List<ElementId>> elements = new List<List<ElementId>>();
+
+                    // ungroup and delete
+                    Transaction transaction = new Transaction(doc);
+                    transaction.Start("Ungroup");
+
+                    foreach (ElInGroup elInGroup in grouping)
+                    {
+                        var group = (Group)doc.GetElement(new ElementId(elInGroup.GroupId));
+                        var grpElements = group.UngroupMembers().ToList();
+                        elements.Add(grpElements);
+                    }
+
+                    transaction.Commit();
+
+                    transaction.Start("Numerate");
+
+                    foreach (ElInGroup elInGroup in grouping)
+                    {
+                        foreach (var pair in elInGroup.Elements)
+                        {
+                            if (pair.Key.LookupParameter(parameterName) is Parameter parameter)
+                            {
+                                parameter.Set(pair.Value);
+                            }
+                        }
+                    }
+
+                    transaction.Commit();
+
+                    transaction.Start("Create new group");
+
+                    foreach (List<ElementId> elementIds in elements)
+                    {
+                        Group newGroup = doc.Create.NewGroup(elementIds);
+                        newGroup.GroupType.Name = grouping.Key;
+                    }
+
+                    transaction.Commit();
+                    transaction.Dispose();
+                }
+
+                transactionGroup.Assimilate();
             }
         }
 
@@ -373,7 +499,7 @@
                 }
 
                 // если поле не было добавлено изначально, то нужно его удалить
-                if (!fieldAlreadyAdded) 
+                if (!fieldAlreadyAdded)
                     RemoveFieldFromSchedule(viewSchedule, builtInParameter.Value);
 
                 transaction.Commit();
@@ -459,7 +585,7 @@
         private static void RemoveFieldFromSchedule(ViewSchedule viewSchedule, BuiltInParameter builtInParameter)
         {
             IList<SchedulableField> schedulableFields = viewSchedule.Definition.GetSchedulableFields();
-            
+
             foreach (SchedulableField sf in schedulableFields)
             {
                 if (sf.FieldType != ScheduleFieldType.Instance)
@@ -584,6 +710,21 @@
             public int RowNumber { get; }
 
             public List<Element> Elements { get; } = new List<Element>();
+        }
+
+        internal class ElInGroup
+        {
+            public ElInGroup(Group group)
+            {
+                GroupId = group.Id.IntegerValue;
+                GroupName = group.Name;
+            }
+
+            public int GroupId { get; }
+
+            public string GroupName { get; set; }
+
+            public Dictionary<Element, string> Elements { get; } = new Dictionary<Element, string>();
         }
     }
 }
