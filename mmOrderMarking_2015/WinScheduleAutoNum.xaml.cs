@@ -64,14 +64,16 @@
                 var parameterName = TbParameter.Visibility == Visibility.Visible
                     ? TbParameter.Text
                     : CbParameter.SelectedItem.ToString();
-                VoidsClass.ScheduleAutoNum(
+
+                VoidsClass voidsClass = new VoidsClass(
                     _commandData,
                     TbPrefix.Text,
                     TbSuffix.Text,
-                    (int)TbStartValue.Value,
-                    CbOrderBy.SelectedIndex == 1 ? OrderDirection.Descending : OrderDirection.Ascending,
-                    parameterName,
-                    (LocationOrder)CbDirection.SelectedIndex);
+                    (int)TbStartValue.Value.Value,
+                    CbOrderBy.SelectedIndex == 1 ? OrderDirection.Descending : OrderDirection.Ascending, parameterName,
+                    (LocationOrder)CbDirection.SelectedIndex,
+                    ChkNumberingInGroups.IsChecked != null && ChkNumberingInGroups.IsChecked.Value);
+                voidsClass.ScheduleAutoNum();
             }
             catch (Exception exception)
             {
@@ -105,23 +107,27 @@
 
         private void WinScheduleAutoNum_OnLoaded(object sender, RoutedEventArgs e)
         {
-            TbPrefix.Text = UserConfigFile.GetValue(UserConfigFile.ConfigFileZone.Settings, LangItem, "Prefix");
-            TbSuffix.Text = UserConfigFile.GetValue(UserConfigFile.ConfigFileZone.Settings, LangItem, "Suffix");
-            TbStartValue.Value = int.TryParse(UserConfigFile.GetValue(UserConfigFile.ConfigFileZone.Settings, LangItem, "StartValue"), out var i)
-                ? i : 1;
-            CbOrderBy.SelectedIndex = int.TryParse(UserConfigFile.GetValue(UserConfigFile.ConfigFileZone.Settings, LangItem, "OrderBy"), out i)
-                ? i : 1;
-            CbDirection.SelectedIndex = int.TryParse(UserConfigFile.GetValue(UserConfigFile.ConfigFileZone.Settings, LangItem, "Direction"), out i)
-                ? i : 0;
+            TbPrefix.Text = UserConfigFile.GetValue(LangItem, "Prefix");
+            TbSuffix.Text = UserConfigFile.GetValue(LangItem, "Suffix");
+            TbStartValue.Value = int.TryParse(UserConfigFile.GetValue(LangItem, "StartValue"), out var i) ? i : 1;
+            CbOrderBy.SelectedIndex = int.TryParse(UserConfigFile.GetValue(LangItem, "OrderBy"), out i) ? i : 1;
+            CbDirection.SelectedIndex = int.TryParse(UserConfigFile.GetValue(LangItem, "Direction"), out i) ? i : 0;
+            ChkNumberingInGroups.IsChecked = bool.TryParse(UserConfigFile.GetValue(LangItem, "NumberingInGroups"), out var b) && b;
+            var selectedParameter = UserConfigFile.GetValue(LangItem, "SelectedParameter");
+            if (CbParameter.Items.Contains(selectedParameter))
+                CbParameter.SelectedItem = selectedParameter;
         }
 
         private void WinScheduleAutoNum_OnClosing(object sender, CancelEventArgs e)
         {
-            UserConfigFile.SetValue(UserConfigFile.ConfigFileZone.Settings, LangItem, "Prefix", TbPrefix.Text, false);
-            UserConfigFile.SetValue(UserConfigFile.ConfigFileZone.Settings, LangItem, "Suffix", TbSuffix.Text, false);
-            UserConfigFile.SetValue(UserConfigFile.ConfigFileZone.Settings, LangItem, "StartValue", TbStartValue.Value.ToString(), false);
-            UserConfigFile.SetValue(UserConfigFile.ConfigFileZone.Settings, LangItem, "OrderBy", CbOrderBy.SelectedIndex.ToString(), false);
-            UserConfigFile.SetValue(UserConfigFile.ConfigFileZone.Settings, LangItem, "Direction", CbDirection.SelectedIndex.ToString(), false);
+            UserConfigFile.SetValue(LangItem, "Prefix", TbPrefix.Text, false);
+            UserConfigFile.SetValue(LangItem, "Suffix", TbSuffix.Text, false);
+            UserConfigFile.SetValue(LangItem, "StartValue", TbStartValue.Value.ToString(), false);
+            UserConfigFile.SetValue(LangItem, "OrderBy", CbOrderBy.SelectedIndex.ToString(), false);
+            UserConfigFile.SetValue(LangItem, "Direction", CbDirection.SelectedIndex.ToString(), false);
+            UserConfigFile.SetValue(LangItem, "NumberingInGroups", (ChkNumberingInGroups.IsChecked != null && ChkNumberingInGroups.IsChecked.Value).ToString(), false);
+            if (CbParameter.SelectedItem != null) 
+                UserConfigFile.SetValue(LangItem, "SelectedParameter", CbParameter.SelectedItem.ToString(), false);
             UserConfigFile.SaveConfigFile();
         }
     }

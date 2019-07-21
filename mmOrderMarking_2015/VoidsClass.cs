@@ -2,7 +2,6 @@
 {
     using System;
     using System.Collections.Generic;
-    using System.Diagnostics;
     using System.Linq;
     using Autodesk.Revit.DB;
     using Autodesk.Revit.DB.Events;
@@ -12,181 +11,91 @@
     using ModPlusAPI.Annotations;
     using ModPlusAPI.Windows;
 
-    public static class VoidsClass
+    public class VoidsClass
     {
+        private readonly ExternalCommandData _commandData;
+        private readonly string _prefix;
+        private readonly string _suffix;
+        private readonly int _startValue;
+        private readonly OrderDirection _orderDirection;
+        private readonly string _parameterName;
+        private readonly LocationOrder _locationOrder;
+        private readonly bool _numberingInGroups;
         private const string LangItem = "mmAutoMarking";
 
-        public static void ScheduleAutoNum(
+        public VoidsClass(
             ExternalCommandData commandData,
             string prefix,
             string suffix,
             int startValue,
             OrderDirection orderDirection,
             string parameterName,
-            LocationOrder locationOrder)
+            LocationOrder locationOrder,
+            bool numberingInGroups)
         {
-            UIApplication uiApp = commandData.Application;
+            _commandData = commandData;
+            _prefix = prefix;
+            _suffix = suffix;
+            _startValue = startValue;
+            _orderDirection = orderDirection;
+            _parameterName = parameterName;
+            _locationOrder = locationOrder;
+            _numberingInGroups = numberingInGroups;
+        }
+
+        public void ScheduleAutoNum()
+        {
+            UIApplication uiApp = _commandData.Application;
             UIDocument uiDoc = uiApp.ActiveUIDocument;
             Document doc = uiDoc.Document;
 
-            uiApp.Application.FailuresProcessing += ApplicationOnFailuresProcessing;
-
             try
             {
+                List<ElNewMark> elNewMarks = new List<ElNewMark>();
                 List<ElInGroup> elementsInGroups = new List<ElInGroup>();
 
-                using (Transaction transaction = new Transaction(doc))
+                uiApp.Application.FailuresProcessing += ApplicationOnFailuresProcessing_SkipAll;
+                if (_commandData.View is ViewSchedule viewSchedule)
                 {
-                    if (transaction.Start("mmOrderMarking") == TransactionStatus.Started)
+                    CollectElementsInSchedule(viewSchedule, elNewMarks, elementsInGroups);
+                }
+                else
+                {
+                    CollectElementsNotInSchedule(elNewMarks, elementsInGroups);
+                }
+                //uiApp.Application.FailuresProcessing -= ApplicationOnFailuresProcessing_SkipAll;
+
+                //uiApp.Application.FailuresProcessing += ApplicationOnFailuresProcessing;
+                if (elNewMarks.Any())
+                {
+                    var transactionName = Language.GetFunctionLocalName(LangItem, new ModPlusConnector().LName);
+                    if (string.IsNullOrEmpty(transactionName))
+                        transactionName = LangItem;
+                    using (Transaction transaction = new Transaction(doc))
                     {
-                        View currentView = uiDoc.ActiveView;
-                        List<Element> sortElements = new List<Element>();
-                        if (currentView.ViewType == ViewType.Schedule)
+                        transaction.Start(transactionName);
+                        foreach (var e in elNewMarks)
                         {
-                            if (commandData.View is ViewSchedule viewSchedule)
+                            if (e.Element.LookupParameter(_parameterName) is Parameter parameter)
                             {
-                                var elements = new FilteredElementCollector(doc, viewSchedule.Id)
-                                    .Where(e => e.LookupParameter(parameterName) != null)
-                                    .ToList();
-
-                                // Если стоит галочка "Для каждого экземпляра", то получаем сортированный список и нумерация
-                                // происходит далее. Иначе получаем сортированный список по строкам и сразу нумеруем
-                                if (viewSchedule.Definition.IsItemized)
-                                {
-                                    sortElements = GetSortedElementsFromItemizedSchedule(viewSchedule, elements);
-                                }
-                                else
-                                {
-                                    var sortedElementsByRows = GetSortedElementsFromNotItemizedSchedule(viewSchedule, elements)
-                                        .Where(e => e.Elements.Count > 0)
-                                        .ToList();
-                                    if (sortedElementsByRows.Any())
-                                    {
-                                        for (var i = 0; i < sortedElementsByRows.Count; i++)
-                                        {
-                                            sortedElementsByRows[i].Elements.ForEach(e =>
-                                            {
-                                                var markValue = orderDirection == OrderDirection.Ascending
-                                                    ? startValue + i
-                                                    : sortElements.Count + startValue - i;
-                                                var newMark = prefix + markValue + suffix;
-
-                                                if (e.GroupId != ElementId.InvalidElementId)
-                                                {
-                                                    var elInGroup = elementsInGroups.FirstOrDefault(g => g.GroupId == e.GroupId.IntegerValue);
-                                                    if (elInGroup == null)
-                                                    {
-                                                        var group = doc.GetElement(e.GroupId) as Group;
-                                                        elInGroup = new ElInGroup(group);
-                                                        elementsInGroups.Add(elInGroup);
-                                                    }
-                                                    elInGroup.Elements.Add(e, newMark);
-                                                }
-                                                else if (e.LookupParameter(parameterName) is Parameter parameter)
-                                                {
-                                                    parameter.Set(newMark);
-                                                }
-                                            });
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        else
-                        {
-                            var elementIds = uiDoc.Selection.GetElementIds();
-                            if (elementIds.Any())
-                            {
-                                List<Element> selectedElements = new List<Element>();
-                                foreach (ElementId elementId in elementIds)
-                                {
-                                    selectedElements.Add(doc.GetElement(elementId));
-                                }
-
-                                sortElements = locationOrder == LocationOrder.Creation
-                                    ? selectedElements.ToList()
-                                    : GetSortedElementsFromSelection(doc, selectedElements, locationOrder);
-                            }
-                            else
-                            {
-                                try
-                                {
-                                    List<Element> pickedElements =
-                                        uiDoc.Selection.PickElementsByRectangle(Language.GetItem(LangItem, "m1")).ToList();
-                                    sortElements = locationOrder == LocationOrder.Creation
-                                        ? pickedElements.ToList()
-                                        : GetSortedElementsFromSelection(doc, pickedElements, locationOrder);
-                                }
-                                catch (Autodesk.Revit.Exceptions.OperationCanceledException)
-                                {
-                                    // ignore
-                                }
+                                parameter.Set(e.Mark);
                             }
                         }
 
-                        for (var i = 0; i < sortElements.Count; i++)
-                        {
-                            var markValue = orderDirection == OrderDirection.Ascending
-                                ? startValue + i
-                                : sortElements.Count + startValue - i;
-                            var newMark = prefix + markValue + suffix;
-
-                            var e = sortElements[i];
-                            if (e.GroupId != ElementId.InvalidElementId)
-                            {
-                                var elInGroup = elementsInGroups.FirstOrDefault(g => g.GroupId == e.GroupId.IntegerValue);
-                                if (elInGroup == null)
-                                {
-                                    var group = doc.GetElement(e.GroupId) as Group;
-                                    elInGroup = new ElInGroup(group);
-                                    elementsInGroups.Add(elInGroup);
-                                }
-                                elInGroup.Elements.Add(e, newMark);
-                            }
-                            else if (e.LookupParameter(parameterName) is Parameter parameter)
-                            {
-                                parameter.Set(newMark);
-                            }
-                        }
+                        transaction.Commit();
                     }
-
-                    transaction.Commit();
                 }
 
-                if (elementsInGroups.Any())
-                    NumerateInGroups(elementsInGroups, doc, parameterName);
+                if (elementsInGroups.Any() && _numberingInGroups)
+                    NumerateInGroups(elementsInGroups, doc);
+
+                //uiApp.Application.FailuresProcessing -= ApplicationOnFailuresProcessing;
+                uiApp.Application.FailuresProcessing -= ApplicationOnFailuresProcessing_SkipAll;
+                
             }
             catch (Exception exception)
             {
                 ExceptionBox.Show(exception);
-            }
-            finally
-            {
-                uiApp.Application.FailuresProcessing += ApplicationOnFailuresProcessing;
-            }
-        }
-
-        private static void ApplicationOnFailuresProcessing(object sender, FailuresProcessingEventArgs e)
-        {
-            var failList = e.GetFailuresAccessor().GetFailureMessages();
-            if (failList.Any())
-            {
-                foreach (FailureMessageAccessor failureMessageAccessor in failList)
-                {
-                    var failureDefinitionId = failureMessageAccessor.GetFailureDefinitionId();
-
-                    // Пропускаю сообщения о дублированных значениях (Одинаковая марка)
-                    if (failureDefinitionId == BuiltInFailures.GeneralFailures.DuplicateValue)
-                    {
-                        e.GetFailuresAccessor().DeleteWarning(failureMessageAccessor);
-                    }
-
-                    // Пропускаю сообщения про группы
-                    if (failureDefinitionId == BuiltInFailures.GroupFailures.AtomViolationWhenOnePlaceInstance)
-                    {
-                        e.GetFailuresAccessor().DeleteWarning(failureMessageAccessor);
-                    }
-                }
             }
         }
 
@@ -197,9 +106,12 @@
             UIApplication uiApp = commandData.Application;
             UIDocument uiDoc = uiApp.ActiveUIDocument;
             Document doc = uiDoc.Document;
+            var transactionName = Language.GetFunctionLocalName(LangItem, new ModPlusConnector().LName);
+            if (string.IsNullOrEmpty(transactionName))
+                transactionName = LangItem;
             using (Transaction transaction = new Transaction(doc))
             {
-                if (transaction.Start("mmOrderMarking") == TransactionStatus.Started)
+                if (transaction.Start(transactionName) == TransactionStatus.Started)
                 {
                     View currentView = uiDoc.ActiveView;
                     List<Element> listElements = new List<Element>();
@@ -250,11 +162,184 @@
             }
         }
 
-        private static void NumerateInGroups(List<ElInGroup> elementsInGroups, Document doc, string parameterName)
+        private void CollectElementsInSchedule(
+            ViewSchedule viewSchedule,
+            List<ElNewMark> elNewMarks,
+            List<ElInGroup> elementsInGroups)
         {
+            var doc = _commandData.Application.ActiveUIDocument.Document;
+
+            var elements = new FilteredElementCollector(doc, viewSchedule.Id)
+                .Where(e => e.LookupParameter(_parameterName) != null)
+                .ToList();
+
+            // Если стоит галочка "Для каждого экземпляра", то получаем сортированный список и нумерация
+            // происходит далее. Иначе получаем сортированный список по строкам и сразу нумеруем
+            if (viewSchedule.Definition.IsItemized)
+            {
+                List<Element> sortElements;
+                using (Transaction transaction = new Transaction(doc))
+                {
+                    transaction.Start("Find in itemized table");
+                    sortElements = GetSortedElementsFromItemizedSchedule(viewSchedule, elements);
+                    transaction.RollBack();
+                }
+
+                for (var i = 0; i < sortElements.Count; i++)
+                {
+                    var e = sortElements[i];
+
+                    ProceedElement(i, sortElements.Count, e, elNewMarks, elementsInGroups, doc);
+                }
+            }
+            else
+            {
+                List<ElInRow> sortedElementsByRows;
+                using (Transaction transaction = new Transaction(doc))
+                {
+                    transaction.Start("Find in rows");
+                    sortedElementsByRows = GetSortedElementsFromNotItemizedSchedule(viewSchedule, elements)
+                        .Where(e => e.Elements.Count > 0)
+                        .ToList();
+                    transaction.RollBack();
+                }
+
+                if (sortedElementsByRows.Any())
+                {
+                    for (var i = 0; i < sortedElementsByRows.Count; i++)
+                    {
+                        sortedElementsByRows[i].Elements.ForEach(e =>
+                        {
+                            ProceedElement(i, sortedElementsByRows.Count, e, elNewMarks, elementsInGroups, doc);
+                        });
+                    }
+                }
+            }
+        }
+
+        private void CollectElementsNotInSchedule(
+            List<ElNewMark> elNewMarks,
+            List<ElInGroup> elementsInGroups)
+        {
+            UIApplication uiApp = _commandData.Application;
+            UIDocument uiDoc = uiApp.ActiveUIDocument;
+            Document doc = uiDoc.Document;
+            List<Element> sortElements = new List<Element>();
+            var elementIds = uiDoc.Selection.GetElementIds();
+            if (elementIds.Any())
+            {
+                List<Element> selectedElements = new List<Element>();
+                foreach (ElementId elementId in elementIds)
+                {
+                    selectedElements.Add(doc.GetElement(elementId));
+                }
+
+                sortElements = _locationOrder == LocationOrder.Creation
+                    ? selectedElements.ToList()
+                    : GetSortedElementsFromSelection(selectedElements);
+            }
+            else
+            {
+                try
+                {
+                    List<Element> pickedElements =
+                        uiDoc.Selection.PickElementsByRectangle(Language.GetItem(LangItem, "m1")).ToList();
+                    sortElements = _locationOrder == LocationOrder.Creation
+                        ? pickedElements.ToList()
+                        : GetSortedElementsFromSelection(pickedElements);
+                }
+                catch (Autodesk.Revit.Exceptions.OperationCanceledException)
+                {
+                    // ignore
+                }
+            }
+
+            for (var i = 0; i < sortElements.Count; i++)
+            {
+                var e = sortElements[i];
+
+                ProceedElement(i, sortElements.Count, e, elNewMarks, elementsInGroups, doc);
+            }
+        }
+
+        private void ProceedElement(
+            int i,
+            int elementsCount,
+            Element e,
+            List<ElNewMark> elNewMarks,
+            List<ElInGroup> elementsInGroups,
+            Document doc)
+        {
+            var markValue = _orderDirection == OrderDirection.Ascending
+                ? _startValue + i
+                : elementsCount + _startValue - i;
+            var newMark = _prefix + markValue + _suffix;
+
+            if (e.GroupId != ElementId.InvalidElementId)
+            {
+                var elInGroup = elementsInGroups.FirstOrDefault(g => g.GroupId == e.GroupId.IntegerValue);
+                if (elInGroup == null)
+                {
+                    var group = doc.GetElement(e.GroupId) as Group;
+                    elInGroup = new ElInGroup(group);
+                    elementsInGroups.Add(elInGroup);
+                }
+
+                elInGroup.Elements.Add(e, newMark);
+            }
+            else
+            {
+                elNewMarks.Add(new ElNewMark(e, newMark));
+            }
+        }
+
+        private void ApplicationOnFailuresProcessing(object sender, FailuresProcessingEventArgs e)
+        {
+            var failList = e.GetFailuresAccessor().GetFailureMessages();
+            if (failList.Any())
+            {
+                foreach (FailureMessageAccessor failureMessageAccessor in failList)
+                {
+                    var failureDefinitionId = failureMessageAccessor.GetFailureDefinitionId();
+
+                    // Пропускаю сообщения о дублированных значениях (Одинаковая марка)
+                    if (failureDefinitionId == BuiltInFailures.GeneralFailures.DuplicateValue)
+                    {
+                        e.GetFailuresAccessor().DeleteWarning(failureMessageAccessor);
+                    }
+
+                    // Пропускаю сообщения про группы
+                    if (failureDefinitionId == BuiltInFailures.GroupFailures.AtomViolationWhenOnePlaceInstance)
+                    {
+                        e.GetFailuresAccessor().DeleteWarning(failureMessageAccessor);
+                    }
+
+                    if (failureDefinitionId == BuiltInFailures.GroupFailures.AtomViolationWhenMultiPlacedInstances)
+                    {
+                        e.GetFailuresAccessor().DeleteWarning(failureMessageAccessor);
+                    }
+                }
+            }
+        }
+
+        private void ApplicationOnFailuresProcessing_SkipAll(object sender, FailuresProcessingEventArgs e)
+        {
+            var failList = e.GetFailuresAccessor().GetFailureMessages();
+            if (failList.Any())
+            {
+                e.GetFailuresAccessor().DeleteAllWarnings();
+                e.SetProcessingResult(FailureProcessingResult.Continue);
+            }
+        }
+
+        private void NumerateInGroups(List<ElInGroup> elementsInGroups, Document doc)
+        {
+            var transactionName = Language.GetFunctionLocalName(LangItem, new ModPlusConnector().LName);
+            if (string.IsNullOrEmpty(transactionName))
+                transactionName = LangItem;
             using (TransactionGroup transactionGroup = new TransactionGroup(doc))
             {
-                transactionGroup.Start();
+                transactionGroup.Start($"{transactionName}: Groups");
 
                 foreach (IGrouping<string, ElInGroup> grouping in elementsInGroups.GroupBy(e => e.GroupName))
                 {
@@ -279,7 +364,7 @@
                     {
                         foreach (var pair in elInGroup.Elements)
                         {
-                            if (pair.Key.LookupParameter(parameterName) is Parameter parameter)
+                            if (pair.Key.LookupParameter(_parameterName) is Parameter parameter)
                             {
                                 parameter.Set(pair.Value);
                             }
@@ -288,15 +373,32 @@
 
                     transaction.Commit();
 
-                    transaction.Start("Create new group");
+                    //transaction.Start("Create new group");
+
+                    //foreach (List<ElementId> elementIds in elements)
+                    //{
+                    //    Group newGroup = doc.Create.NewGroup(elementIds);
+                    //    newGroup.GroupType.Name = grouping.Key;
+                    //}
+
+                    //transaction.Commit();
 
                     foreach (List<ElementId> elementIds in elements)
                     {
+                        transaction.Start("Create new group");
+
                         Group newGroup = doc.Create.NewGroup(elementIds);
-                        newGroup.GroupType.Name = grouping.Key;
+                        var groupType = new FilteredElementCollector(doc)
+                            .OfClass(typeof(GroupType))
+                            .Cast<GroupType>()
+                            .FirstOrDefault(g => g.Name == grouping.Key);
+                        if (groupType != null)
+                            newGroup.GroupType = groupType;
+                        else newGroup.GroupType.Name = grouping.Key;
+
+                        transaction.Commit();
                     }
 
-                    transaction.Commit();
                     transaction.Dispose();
                 }
 
@@ -310,7 +412,7 @@
         /// <param name="viewSchedule">Вид спецификации</param>
         /// <param name="elements">Элементы, полученные с этого вида</param>
         /// <returns></returns>
-        private static List<Element> GetSortedElementsFromItemizedSchedule(ViewSchedule viewSchedule, List<Element> elements)
+        private List<Element> GetSortedElementsFromItemizedSchedule(ViewSchedule viewSchedule, List<Element> elements)
         {
             List<Element> sortedElements = new List<Element>();
 
@@ -328,6 +430,9 @@
                 // Записываем Id всех элементов в параметр "Комментарий"
                 elements.ForEach(e =>
                 {
+                    if (e.GroupId != ElementId.InvalidElementId)
+                        (e.Document.GetElement(e.GroupId) as Group)?.UngroupMembers();
+
                     var parameter = e.get_Parameter(builtInParameter.Value);
                     parameter.Set(parameter.AsString() + separator + e.Id.IntegerValue);
                 });
@@ -376,7 +481,7 @@
         /// <param name="viewSchedule">Вид спецификации</param>
         /// <param name="elements">Элементы, полученные с этого вида</param>
         /// <returns></returns>
-        private static List<ElInRow> GetSortedElementsFromNotItemizedSchedule(ViewSchedule viewSchedule, List<Element> elements)
+        private List<ElInRow> GetSortedElementsFromNotItemizedSchedule(ViewSchedule viewSchedule, List<Element> elements)
         {
             List<ElInRow> sortedElements = new List<ElInRow>();
 
@@ -396,7 +501,7 @@
             var columnNumber = -1;
             var startRowNumber = -1;
 
-            bool fieldAlreadyAdded = false;
+            bool fieldAlreadyAdded;
 
             using (SubTransaction transaction = new SubTransaction(viewSchedule.Document))
             {
@@ -405,6 +510,9 @@
                 // всем элементам записываем в комментарий сигнальное значение в виде двух специальных символов
                 elements.ForEach(e =>
                 {
+                    if (e.GroupId != ElementId.InvalidElementId)
+                        (e.Document.GetElement(e.GroupId) as Group)?.UngroupMembers();
+
                     var parameter = e.get_Parameter(builtInParameter.Value);
                     parameter.Set(signalValue);
                 });
@@ -435,8 +543,7 @@
                         }
                     }
                 }
-
-
+                
                 transaction.Commit();
             }
 
@@ -509,11 +616,11 @@
         }
 
         [CanBeNull]
-        private static BuiltInParameter? GetBuiltInParameterForElements(List<Element> elements)
+        private BuiltInParameter? GetBuiltInParameterForElements(List<Element> elements)
         {
             BuiltInParameter? returnedBuiltInParameter = null;
 
-            foreach (BuiltInParameter builtInParameter in AllowableBuiltInParameter)
+            foreach (BuiltInParameter builtInParameter in _allowableBuiltInParameter)
             {
                 foreach (Element element in elements)
                 {
@@ -533,7 +640,7 @@
             return returnedBuiltInParameter;
         }
 
-        private static readonly List<BuiltInParameter> AllowableBuiltInParameter = new List<BuiltInParameter>
+        private readonly List<BuiltInParameter> _allowableBuiltInParameter = new List<BuiltInParameter>
         {
             BuiltInParameter.ALL_MODEL_INSTANCE_COMMENTS,
             BuiltInParameter.SHEET_NAME
@@ -617,9 +724,9 @@
             viewSchedule.Document.Regenerate();
         }
 
-        private static List<Element> GetSortedElementsFromSelection(Document doc, List<Element> elements, LocationOrder locationOrder)
+        private List<Element> GetSortedElementsFromSelection(IEnumerable<Element> elements)
         {
-            List<Element> sortedElements = new List<Element>();
+            var sortedElements = new List<Element>();
 
             Dictionary<Element, XYZ> points = new Dictionary<Element, XYZ>();
 
@@ -674,19 +781,19 @@
             if (rows.Any())
             {
                 rows.Sort((r1, r2) => r1.Values.First().Y.CompareTo(r2.Values.First().Y));
-                if (locationOrder == LocationOrder.LeftToRightUpToDown ||
-                    locationOrder == LocationOrder.RightToLeftUpToDown)
+                if (_locationOrder == LocationOrder.LeftToRightUpToDown ||
+                    _locationOrder == LocationOrder.RightToLeftUpToDown)
                     rows.Reverse();
                 foreach (Dictionary<Element, XYZ> row in rows)
                 {
-                    if (locationOrder == LocationOrder.LeftToRightDownToUp ||
-                        locationOrder == LocationOrder.LeftToRightUpToDown)
+                    if (_locationOrder == LocationOrder.LeftToRightDownToUp ||
+                        _locationOrder == LocationOrder.LeftToRightUpToDown)
                         foreach (KeyValuePair<Element, XYZ> keyValuePair in row.OrderBy(r => r.Value.X))
                         {
                             sortedElements.Add(keyValuePair.Key);
                         }
-                    else if (locationOrder == LocationOrder.RightToLeftDownToUp ||
-                             locationOrder == LocationOrder.RightToLeftUpToDown)
+                    else if (_locationOrder == LocationOrder.RightToLeftDownToUp ||
+                             _locationOrder == LocationOrder.RightToLeftUpToDown)
                         foreach (KeyValuePair<Element, XYZ> keyValuePair in row.OrderByDescending(r => r.Value.X))
                         {
                             sortedElements.Add(keyValuePair.Key);
@@ -725,6 +832,19 @@
             public string GroupName { get; set; }
 
             public Dictionary<Element, string> Elements { get; } = new Dictionary<Element, string>();
+        }
+
+        internal class ElNewMark
+        {
+            public ElNewMark(Element element, string mark)
+            {
+                Element = element;
+                Mark = mark;
+            }
+
+            public Element Element { get; }
+
+            public string Mark { get; }
         }
     }
 }

@@ -83,15 +83,27 @@
             </Grid>
         </GroupBox>
         <Grid Grid.Row="2">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"></ColumnDefinition>
-                <ColumnDefinition Width="*"></ColumnDefinition>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
-            <Button Grid.Column="0" Content="{Binding Source={StaticResource Lang}, XPath=h4}" HorizontalAlignment="Left"
+            <CheckBox Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2"
+                      Content="{Binding Source={StaticResource Lang}, XPath=h10}"
+                      ToolTip="{Binding Source={StaticResource Lang}, XPath=h11}"
+                      ToolTipService.InitialShowDelay="0"
+                      ToolTipService.ShowDuration="15000"
+                      Name="ChkNumberingInGroups"></CheckBox>
+            <Button Grid.Column="0" Grid.Row="1"
+                    Content="{Binding Source={StaticResource Lang}, XPath=h4}" HorizontalAlignment="Left"
                     Name="Do" Click="Do_Click"
                     ToolTipService.InitialShowDelay="0"
                     ToolTipService.ShowOnDisabled="True"></Button>
-            <Button Grid.Column="1" Content="{Binding Source={StaticResource Lang}, XPath=h5}" HorizontalAlignment="Right"
+            <Button Grid.Column="1" Grid.Row="1"
+                    Content="{Binding Source={StaticResource Lang}, XPath=h5}" HorizontalAlignment="Right"
                     Name="Clear" Click="Clear_Click"></Button>
         </Grid>
     </Grid>
