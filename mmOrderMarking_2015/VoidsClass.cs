@@ -91,7 +91,7 @@
 
                 //uiApp.Application.FailuresProcessing -= ApplicationOnFailuresProcessing;
                 uiApp.Application.FailuresProcessing -= ApplicationOnFailuresProcessing_SkipAll;
-                
+
             }
             catch (Exception exception)
             {
@@ -346,60 +346,67 @@
                     List<List<ElementId>> elements = new List<List<ElementId>>();
 
                     // ungroup and delete
-                    Transaction transaction = new Transaction(doc);
-                    transaction.Start("Ungroup");
-
-                    foreach (ElInGroup elInGroup in grouping)
+                    using (Transaction transaction = new Transaction(doc))
                     {
-                        var group = (Group)doc.GetElement(new ElementId(elInGroup.GroupId));
-                        var grpElements = group.UngroupMembers().ToList();
-                        elements.Add(grpElements);
-                    }
+                        transaction.Start("Ungroup");
 
-                    transaction.Commit();
-
-                    transaction.Start("Numerate");
-
-                    foreach (ElInGroup elInGroup in grouping)
-                    {
-                        foreach (var pair in elInGroup.Elements)
+                        foreach (ElInGroup elInGroup in grouping)
                         {
-                            if (pair.Key.LookupParameter(_parameterName) is Parameter parameter)
+                            var group = (Group) doc.GetElement(new ElementId(elInGroup.GroupId));
+                            var grpElements = group.UngroupMembers().ToList();
+                            elements.Add(grpElements);
+                        }
+
+                        transaction.Commit();
+
+                        transaction.Start("Numerate");
+
+                        foreach (ElInGroup elInGroup in grouping)
+                        {
+                            foreach (var pair in elInGroup.Elements)
                             {
-                                parameter.Set(pair.Value);
+                                if (pair.Key.LookupParameter(_parameterName) is Parameter parameter)
+                                {
+                                    parameter.Set(pair.Value);
+                                }
                             }
                         }
-                    }
 
-                    transaction.Commit();
+                        transaction.Commit();
 
-                    //transaction.Start("Create new group");
-
-                    //foreach (List<ElementId> elementIds in elements)
-                    //{
-                    //    Group newGroup = doc.Create.NewGroup(elementIds);
-                    //    newGroup.GroupType.Name = grouping.Key;
-                    //}
-
-                    //transaction.Commit();
-
-                    foreach (List<ElementId> elementIds in elements)
-                    {
                         transaction.Start("Create new group");
+                        var idsToDelete = new List<ElementId>();
+                        GroupType createdGroup = null;
+                        foreach (List<ElementId> elementIds in elements)
+                        {
+                            Group newGroup = doc.Create.NewGroup(elementIds);
+                            if (createdGroup == null)
+                            {
+                                createdGroup = new FilteredElementCollector(doc)
+                                    .OfClass(typeof(GroupType))
+                                    .Cast<GroupType>()
+                                    .FirstOrDefault(g => g.Name == grouping.Key);
+                                if (createdGroup != null)
+                                {
+                                    idsToDelete.Add(newGroup.GroupType.Id);
+                                    newGroup.GroupType = createdGroup;
+                                }
+                                else
+                                {
+                                    newGroup.GroupType.Name = grouping.Key;
+                                }
+                            }
+                            else
+                            {
+                                idsToDelete.Add(newGroup.GroupType.Id);
+                                newGroup.GroupType = createdGroup;
+                            }
+                        }
 
-                        Group newGroup = doc.Create.NewGroup(elementIds);
-                        var groupType = new FilteredElementCollector(doc)
-                            .OfClass(typeof(GroupType))
-                            .Cast<GroupType>()
-                            .FirstOrDefault(g => g.Name == grouping.Key);
-                        if (groupType != null)
-                            newGroup.GroupType = groupType;
-                        else newGroup.GroupType.Name = grouping.Key;
+                        doc.Delete(idsToDelete);
 
                         transaction.Commit();
                     }
-
-                    transaction.Dispose();
                 }
 
                 transactionGroup.Assimilate();
@@ -543,7 +550,7 @@
                         }
                     }
                 }
-                
+
                 transaction.Commit();
             }
 
