@@ -54,7 +54,8 @@
                 List<ElNewMark> elNewMarks = new List<ElNewMark>();
                 List<ElInGroup> elementsInGroups = new List<ElInGroup>();
 
-                uiApp.Application.FailuresProcessing += ApplicationOnFailuresProcessing_SkipAll;
+                ////uiApp.Application.FailuresProcessing += ApplicationOnFailuresProcessing_SkipAll;
+
                 if (_commandData.View is ViewSchedule viewSchedule)
                 {
                     CollectElementsInSchedule(viewSchedule, elNewMarks, elementsInGroups);
@@ -63,9 +64,7 @@
                 {
                     CollectElementsNotInSchedule(elNewMarks, elementsInGroups);
                 }
-                //uiApp.Application.FailuresProcessing -= ApplicationOnFailuresProcessing_SkipAll;
 
-                //uiApp.Application.FailuresProcessing += ApplicationOnFailuresProcessing;
                 if (elNewMarks.Any())
                 {
                     var transactionName = Language.GetFunctionLocalName(LangItem, new ModPlusConnector().LName);
@@ -89,8 +88,7 @@
                 if (elementsInGroups.Any() && _numberingInGroups)
                     NumerateInGroups(elementsInGroups, doc);
 
-                //uiApp.Application.FailuresProcessing -= ApplicationOnFailuresProcessing;
-                uiApp.Application.FailuresProcessing -= ApplicationOnFailuresProcessing_SkipAll;
+                ////uiApp.Application.FailuresProcessing -= ApplicationOnFailuresProcessing_SkipAll;
 
             }
             catch (Exception exception)
@@ -277,15 +275,30 @@
 
             if (e.GroupId != ElementId.InvalidElementId)
             {
-                var elInGroup = elementsInGroups.FirstOrDefault(g => g.GroupId == e.GroupId.IntegerValue);
-                if (elInGroup == null)
+                var parameter = e.LookupParameter(_parameterName);
+                if (parameter != null)
                 {
-                    var group = doc.GetElement(e.GroupId) as Group;
-                    elInGroup = new ElInGroup(group);
-                    elementsInGroups.Add(elInGroup);
-                }
+                    var map = doc.ParameterBindings;
 
-                elInGroup.Elements.Add(e, newMark);
+                    var binding = map.get_Item(parameter.Definition);
+                    if (binding is InstanceBinding instanceBinding &&
+                        ((InternalDefinition) parameter.Definition).VariesAcrossGroups)
+                    {
+                        elNewMarks.Add(new ElNewMark(e, newMark));
+                    }
+                    else
+                    {
+                        var elInGroup = elementsInGroups.FirstOrDefault(g => g.GroupId == e.GroupId.IntegerValue);
+                        if (elInGroup == null)
+                        {
+                            var group = doc.GetElement(e.GroupId) as Group;
+                            elInGroup = new ElInGroup(group);
+                            elementsInGroups.Add(elInGroup);
+                        }
+
+                        elInGroup.Elements.Add(e, newMark);
+                    }
+                }
             }
             else
             {
