@@ -6,12 +6,13 @@
     using Autodesk.Revit.DB;
     using Autodesk.Revit.DB.Events;
     using Autodesk.Revit.UI;
+    using Autodesk.Revit.UI.Selection;
     using Enums;
     using ModPlusAPI;
     using ModPlusAPI.Annotations;
     using ModPlusAPI.Windows;
 
-    public class VoidsClass
+    public class NumerateService
     {
         private readonly ExternalCommandData _commandData;
         private readonly string _prefix;
@@ -23,7 +24,7 @@
         private readonly bool _numberingInGroups;
         private const string LangItem = "mmAutoMarking";
 
-        public VoidsClass(
+        public NumerateService(
             ExternalCommandData commandData,
             string prefix,
             string suffix,
@@ -43,7 +44,7 @@
             _numberingInGroups = numberingInGroups;
         }
 
-        public void ScheduleAutoNum()
+        public void ProceedNumeration()
         {
             UIApplication uiApp = _commandData.Application;
             UIDocument uiDoc = uiApp.ActiveUIDocument;
@@ -54,7 +55,7 @@
                 List<ElNewMark> elNewMarks = new List<ElNewMark>();
                 List<ElInGroup> elementsInGroups = new List<ElInGroup>();
 
-                ////uiApp.Application.FailuresProcessing += ApplicationOnFailuresProcessing_SkipAll;
+                uiApp.Application.FailuresProcessing += ApplicationOnFailuresProcessing;
 
                 if (_commandData.View is ViewSchedule viewSchedule)
                 {
@@ -88,7 +89,7 @@
                 if (elementsInGroups.Any() && _numberingInGroups)
                     NumerateInGroups(elementsInGroups, doc);
 
-                ////uiApp.Application.FailuresProcessing -= ApplicationOnFailuresProcessing_SkipAll;
+                uiApp.Application.FailuresProcessing -= ApplicationOnFailuresProcessing;
 
             }
             catch (Exception exception)
@@ -240,8 +241,9 @@
             {
                 try
                 {
-                    List<Element> pickedElements =
-                        uiDoc.Selection.PickElementsByRectangle(Language.GetItem(LangItem, "m1")).ToList();
+                    var pickedElements =
+                        uiDoc.Selection.PickObjects(ObjectType.Element, Language.GetItem(LangItem, "m1"))
+                            .Select(r => doc.GetElement(r));
                     sortElements = _locationOrder == LocationOrder.Creation
                         ? pickedElements.ToList()
                         : GetSortedElementsFromSelection(pickedElements);
@@ -279,10 +281,14 @@
                 if (parameter != null)
                 {
                     var map = doc.ParameterBindings;
-
                     var binding = map.get_Item(parameter.Definition);
-                    if (binding is InstanceBinding instanceBinding &&
-                        ((InternalDefinition) parameter.Definition).VariesAcrossGroups)
+                    InternalDefinition internalDefinition = (InternalDefinition)parameter.Definition;
+
+                    // Параметр меняем без разгруппировки, если:
+                    // 1 - это стандартный параметр "Марка"
+                    // 2 - это общий параметр проекта с включенным свойством "Значения могут меняться по экземплярам групп"
+                    if ((binding != null && internalDefinition.VariesAcrossGroups) ||
+                        internalDefinition.BuiltInParameter == BuiltInParameter.ALL_MODEL_MARK)
                     {
                         elNewMarks.Add(new ElNewMark(e, newMark));
                     }
@@ -322,15 +328,15 @@
                     }
 
                     // Пропускаю сообщения про группы
-                    if (failureDefinitionId == BuiltInFailures.GroupFailures.AtomViolationWhenOnePlaceInstance)
-                    {
-                        e.GetFailuresAccessor().DeleteWarning(failureMessageAccessor);
-                    }
+                    ////if (failureDefinitionId == BuiltInFailures.GroupFailures.AtomViolationWhenOnePlaceInstance)
+                    ////{
+                    ////    e.GetFailuresAccessor().DeleteWarning(failureMessageAccessor);
+                    ////}
 
-                    if (failureDefinitionId == BuiltInFailures.GroupFailures.AtomViolationWhenMultiPlacedInstances)
-                    {
-                        e.GetFailuresAccessor().DeleteWarning(failureMessageAccessor);
-                    }
+                    ////if (failureDefinitionId == BuiltInFailures.GroupFailures.AtomViolationWhenMultiPlacedInstances)
+                    ////{
+                    ////    e.GetFailuresAccessor().DeleteWarning(failureMessageAccessor);
+                    ////}
                 }
             }
         }

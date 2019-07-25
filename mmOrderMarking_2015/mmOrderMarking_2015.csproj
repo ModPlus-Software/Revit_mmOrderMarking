@@ -68,7 +68,7 @@
     <Compile Include="Enums\OrderDirection.cs" />
     <Compile Include="ModPlusConnector.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="VoidsClass.cs" />
+    <Compile Include="NumerateService.cs" />
     <Compile Include="WinScheduleAutoNum.xaml.cs">
       <DependentUpon>WinScheduleAutoNum.xaml</DependentUpon>
     </Compile>

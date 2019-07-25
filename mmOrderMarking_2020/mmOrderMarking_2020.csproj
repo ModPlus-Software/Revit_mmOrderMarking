@@ -76,11 +76,11 @@
     <Compile Include="..\mmOrderMarking_2015\ModPlusConnector.cs">
       <Link>ModPlusConnector.cs</Link>
     </Compile>
+    <Compile Include="..\mmOrderMarking_2015\NumerateService.cs">
+      <Link>NumerateService.cs</Link>
+    </Compile>
     <Compile Include="..\mmOrderMarking_2015\Properties\AssemblyInfo.cs">
       <Link>Properties\AssemblyInfo.cs</Link>
-    </Compile>
-    <Compile Include="..\mmOrderMarking_2015\VoidsClass.cs">
-      <Link>VoidsClass.cs</Link>
     </Compile>
     <Compile Include="..\mmOrderMarking_2015\WinScheduleAutoNum.xaml.cs">
       <Link>WinScheduleAutoNum.xaml.cs</Link>

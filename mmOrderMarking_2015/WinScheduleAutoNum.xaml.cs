@@ -2,7 +2,6 @@
 {
     using System;
     using System.ComponentModel;
-    using System.Diagnostics;
     using System.Linq;
     using System.Windows;
     using Autodesk.Revit.DB;
@@ -65,15 +64,16 @@
                     ? TbParameter.Text
                     : CbParameter.SelectedItem.ToString();
 
-                VoidsClass voidsClass = new VoidsClass(
+                NumerateService numerateService = new NumerateService(
                     _commandData,
                     TbPrefix.Text,
                     TbSuffix.Text,
+                    // ReSharper disable once PossibleInvalidOperationException
                     (int)TbStartValue.Value.Value,
                     CbOrderBy.SelectedIndex == 1 ? OrderDirection.Descending : OrderDirection.Ascending, parameterName,
                     (LocationOrder)CbDirection.SelectedIndex,
                     ChkNumberingInGroups.IsChecked != null && ChkNumberingInGroups.IsChecked.Value);
-                voidsClass.ScheduleAutoNum();
+                numerateService.ProceedNumeration();
             }
             catch (Exception exception)
             {
@@ -93,7 +93,7 @@
                 var parameterName = TbParameter.Visibility == Visibility.Visible
                     ? TbParameter.Text
                     : CbParameter.SelectedItem.ToString();
-                VoidsClass.ScheduleAutoDel(_commandData, parameterName);
+                NumerateService.ScheduleAutoDel(_commandData, parameterName);
             }
             catch (Exception exception)
             {
