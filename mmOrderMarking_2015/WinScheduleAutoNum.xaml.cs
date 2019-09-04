@@ -2,6 +2,7 @@
 {
     using System;
     using System.ComponentModel;
+    using System.Diagnostics;
     using System.Linq;
     using System.Windows;
     using Autodesk.Revit.DB;
@@ -30,20 +31,41 @@
                 CbOrderBy.Visibility = Visibility.Visible;
                 var elements = new FilteredElementCollector(commandData.View.Document, commandData.View.Id)
                     .WhereElementIsNotElementType().ToList();
-                foreach (SchedulableField schedulableField in viewSchedule.Definition.GetSchedulableFields())
+                var element = elements.FirstOrDefault();
+                if (element != null)
                 {
-                    if (schedulableField.FieldType == ScheduleFieldType.Instance)
-                    {
-                        var parameter = elements.First().get_Parameter((BuiltInParameter)schedulableField.ParameterId.IntegerValue);
-                        if (parameter != null && parameter.StorageType == StorageType.String &&
-                            !parameter.IsReadOnly)
-                            CbParameter.Items.Add(schedulableField.GetName(viewSchedule.Document));
-                    }
-                }
+                    var parameters = element.Parameters.Cast<Parameter>().ToDictionary(p => p.Id.IntegerValue, p => p);
 
-                if (elements.First().get_Parameter(BuiltInParameter.ALL_MODEL_MARK) != null)
-                    CbParameter.SelectedItem = LabelUtils.GetLabelFor(BuiltInParameter.ALL_MODEL_MARK);
-                else CbParameter.SelectedIndex = 0;
+                    // Если снята галочка "Для каждого экземпляра", то добавляем параметры типа
+                    if (!viewSchedule.Definition.IsItemized)
+                    {
+                        var t = viewSchedule.Document.GetElement(element.GetTypeId());
+                        if (t != null)
+                        {
+                            foreach (var parameter in t.Parameters.Cast<Parameter>())
+                            {
+                                if (!parameters.ContainsKey(parameter.Id.IntegerValue))
+                                    parameters.Add(parameter.Id.IntegerValue, parameter);
+                            }
+                        }
+                    }
+
+                    foreach (var schedulableField in viewSchedule.Definition.GetSchedulableFields())
+                    {
+                        if (schedulableField.FieldType == ScheduleFieldType.Instance)
+                        {
+                            if (parameters.TryGetValue(schedulableField.ParameterId.IntegerValue, out var parameter) &&
+                                parameter.StorageType == StorageType.String && !parameter.IsReadOnly)
+                            {
+                                CbParameter.Items.Add(schedulableField.GetName(viewSchedule.Document));
+                            }
+                        }
+                    }
+
+                    if (element.get_Parameter(BuiltInParameter.ALL_MODEL_MARK) != null)
+                        CbParameter.SelectedItem = LabelUtils.GetLabelFor(BuiltInParameter.ALL_MODEL_MARK);
+                    else CbParameter.SelectedIndex = 0;
+                }
             }
             else
             {
@@ -70,7 +92,8 @@
                     TbSuffix.Text,
                     // ReSharper disable once PossibleInvalidOperationException
                     (int)TbStartValue.Value.Value,
-                    CbOrderBy.SelectedIndex == 1 ? OrderDirection.Descending : OrderDirection.Ascending, parameterName,
+                    CbOrderBy.SelectedIndex == 1 ? OrderDirection.Descending : OrderDirection.Ascending,
+                    parameterName,
                     (LocationOrder)CbDirection.SelectedIndex,
                     ChkNumberingInGroups.IsChecked != null && ChkNumberingInGroups.IsChecked.Value);
                 numerateService.ProceedNumeration();
@@ -126,7 +149,7 @@
             UserConfigFile.SetValue(LangItem, "OrderBy", CbOrderBy.SelectedIndex.ToString(), false);
             UserConfigFile.SetValue(LangItem, "Direction", CbDirection.SelectedIndex.ToString(), false);
             UserConfigFile.SetValue(LangItem, "NumberingInGroups", (ChkNumberingInGroups.IsChecked != null && ChkNumberingInGroups.IsChecked.Value).ToString(), false);
-            if (CbParameter.SelectedItem != null) 
+            if (CbParameter.SelectedItem != null)
                 UserConfigFile.SetValue(LangItem, "SelectedParameter", CbParameter.SelectedItem.ToString(), false);
             UserConfigFile.SaveConfigFile();
         }

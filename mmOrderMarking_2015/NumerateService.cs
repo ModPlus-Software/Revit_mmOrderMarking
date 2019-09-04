@@ -80,6 +80,14 @@
                             {
                                 parameter.Set(e.Mark);
                             }
+                            else
+                            {
+                                var t = e.Element.Document.GetElement(e.Element.GetTypeId());
+                                if (t != null && t.LookupParameter(_parameterName) is Parameter p)
+                                {
+                                    p.Set(e.Mark);
+                                }
+                            }
                         }
 
                         transaction.Commit();
@@ -168,14 +176,14 @@
         {
             var doc = _commandData.Application.ActiveUIDocument.Document;
 
-            var elements = new FilteredElementCollector(doc, viewSchedule.Id)
-                .Where(e => e.LookupParameter(_parameterName) != null)
-                .ToList();
-
             // Если стоит галочка "Для каждого экземпляра", то получаем сортированный список и нумерация
             // происходит далее. Иначе получаем сортированный список по строкам и сразу нумеруем
             if (viewSchedule.Definition.IsItemized)
             {
+                var elements = new FilteredElementCollector(doc, viewSchedule.Id)
+                    .Where(e => e.LookupParameter(_parameterName) != null)
+                    .ToList();
+
                 List<Element> sortElements;
                 using (Transaction transaction = new Transaction(doc))
                 {
@@ -193,6 +201,11 @@
             }
             else
             {
+                var elements = new FilteredElementCollector(doc, viewSchedule.Id)
+                    .Where(e => e.LookupParameter(_parameterName) != null ||
+                                viewSchedule.Document.GetElement(e.GetTypeId())?.LookupParameter(_parameterName) != null)
+                    .ToList();
+
                 List<ElInRow> sortedElementsByRows;
                 using (Transaction transaction = new Transaction(doc))
                 {

@@ -1,6 +1,5 @@
 ﻿namespace mmOrderMarking
 {
-    using System;
     using System.Linq;
     using Autodesk.Revit.Attributes;
     using Autodesk.Revit.DB;
@@ -16,7 +15,7 @@
 
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
-            ModPlusAPI.Statistic.SendCommandStarting(new ModPlusConnector());
+            Statistic.SendCommandStarting(new ModPlusConnector());
 
             if (commandData.View is ViewSchedule)
             {
@@ -33,19 +32,13 @@
             if (_window == null)
             {
                 _window = new WinScheduleAutoNum(commandData);
-                _window.Closed += Window_Closed;
+                _window.Closed += (sender, args) => _window = null;
             }
             if (_window.IsLoaded)
                 _window.Activate();
             else _window.ShowDialog();
 
             return Result.Succeeded;
-        }
-
-        // Closing window WPF
-        private void Window_Closed(object sender, EventArgs e)
-        {
-            _window = null;
         }
     }
 }
