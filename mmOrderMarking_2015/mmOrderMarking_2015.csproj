@@ -63,6 +63,7 @@
     <Reference Include="WindowsBase" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="CbParameter.cs" />
     <Compile Include="Command.cs" />
     <Compile Include="Enums\LocationOrder.cs" />
     <Compile Include="Enums\OrderDirection.cs" />

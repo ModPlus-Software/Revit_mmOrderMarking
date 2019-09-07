@@ -46,14 +46,14 @@
 
         public void ProceedNumeration()
         {
-            UIApplication uiApp = _commandData.Application;
-            UIDocument uiDoc = uiApp.ActiveUIDocument;
-            Document doc = uiDoc.Document;
+            var uiApp = _commandData.Application;
+            var uiDoc = uiApp.ActiveUIDocument;
+            var doc = uiDoc.Document;
 
             try
             {
-                List<ElNewMark> elNewMarks = new List<ElNewMark>();
-                List<ElInGroup> elementsInGroups = new List<ElInGroup>();
+                var elNewMarks = new List<ElNewMark>();
+                var elementsInGroups = new List<ElInGroup>();
 
                 uiApp.Application.FailuresProcessing += ApplicationOnFailuresProcessing;
 
@@ -71,7 +71,7 @@
                     var transactionName = Language.GetFunctionLocalName(LangItem, new ModPlusConnector().LName);
                     if (string.IsNullOrEmpty(transactionName))
                         transactionName = LangItem;
-                    using (Transaction transaction = new Transaction(doc))
+                    using (var transaction = new Transaction(doc))
                     {
                         transaction.Start(transactionName);
                         foreach (var e in elNewMarks)
@@ -110,18 +110,18 @@
             ExternalCommandData commandData,
             string parameterName)
         {
-            UIApplication uiApp = commandData.Application;
-            UIDocument uiDoc = uiApp.ActiveUIDocument;
-            Document doc = uiDoc.Document;
+            var uiApp = commandData.Application;
+            var uiDoc = uiApp.ActiveUIDocument;
+            var doc = uiDoc.Document;
             var transactionName = Language.GetFunctionLocalName(LangItem, new ModPlusConnector().LName);
             if (string.IsNullOrEmpty(transactionName))
                 transactionName = LangItem;
-            using (Transaction transaction = new Transaction(doc))
+            using (var transaction = new Transaction(doc))
             {
                 if (transaction.Start(transactionName) == TransactionStatus.Started)
                 {
-                    View currentView = uiDoc.ActiveView;
-                    List<Element> listElements = new List<Element>();
+                    var currentView = uiDoc.ActiveView;
+                    var listElements = new List<Element>();
                     if (currentView.ViewType == ViewType.Schedule)
                     {
                         if (commandData.View is ViewSchedule viewSchedule)
@@ -136,7 +136,7 @@
                         var elementIds = uiDoc.Selection.GetElementIds();
                         if (elementIds.Any())
                         {
-                            foreach (ElementId elementId in elementIds)
+                            foreach (var elementId in elementIds)
                             {
                                 listElements.Add(doc.GetElement(elementId));
                             }
@@ -145,7 +145,7 @@
                         {
                             try
                             {
-                                IList<Element> selectedElements =
+                                var selectedElements =
                                     uiDoc.Selection.PickElementsByRectangle(Language.GetItem(LangItem, "m1"));
                                 listElements = selectedElements.ToList();
                             }
@@ -156,7 +156,7 @@
                         }
                     }
 
-                    foreach (Element pickedElement in listElements)
+                    foreach (var pickedElement in listElements)
                     {
                         if (pickedElement.LookupParameter(parameterName) is Parameter parameter)
                         {
@@ -185,7 +185,7 @@
                     .ToList();
 
                 List<Element> sortElements;
-                using (Transaction transaction = new Transaction(doc))
+                using (var transaction = new Transaction(doc))
                 {
                     transaction.Start("Find in itemized table");
                     sortElements = GetSortedElementsFromItemizedSchedule(viewSchedule, elements);
@@ -207,7 +207,7 @@
                     .ToList();
 
                 List<ElInRow> sortedElementsByRows;
-                using (Transaction transaction = new Transaction(doc))
+                using (var transaction = new Transaction(doc))
                 {
                     transaction.Start("Find in rows");
                     sortedElementsByRows = GetSortedElementsFromNotItemizedSchedule(viewSchedule, elements)
@@ -233,15 +233,15 @@
             List<ElNewMark> elNewMarks,
             List<ElInGroup> elementsInGroups)
         {
-            UIApplication uiApp = _commandData.Application;
-            UIDocument uiDoc = uiApp.ActiveUIDocument;
-            Document doc = uiDoc.Document;
-            List<Element> sortElements = new List<Element>();
+            var uiApp = _commandData.Application;
+            var uiDoc = uiApp.ActiveUIDocument;
+            var doc = uiDoc.Document;
+            var sortElements = new List<Element>();
             var elementIds = uiDoc.Selection.GetElementIds();
             if (elementIds.Any())
             {
-                List<Element> selectedElements = new List<Element>();
-                foreach (ElementId elementId in elementIds)
+                var selectedElements = new List<Element>();
+                foreach (var elementId in elementIds)
                 {
                     selectedElements.Add(doc.GetElement(elementId));
                 }
@@ -295,7 +295,7 @@
                 {
                     var map = doc.ParameterBindings;
                     var binding = map.get_Item(parameter.Definition);
-                    InternalDefinition internalDefinition = (InternalDefinition)parameter.Definition;
+                    var internalDefinition = (InternalDefinition)parameter.Definition;
 
                     // Параметр меняем без разгруппировки, если:
                     // 1 - это стандартный параметр "Марка"
@@ -330,7 +330,7 @@
             var failList = e.GetFailuresAccessor().GetFailureMessages();
             if (failList.Any())
             {
-                foreach (FailureMessageAccessor failureMessageAccessor in failList)
+                foreach (var failureMessageAccessor in failList)
                 {
                     var failureDefinitionId = failureMessageAccessor.GetFailureDefinitionId();
 
@@ -369,20 +369,20 @@
             var transactionName = Language.GetFunctionLocalName(LangItem, new ModPlusConnector().LName);
             if (string.IsNullOrEmpty(transactionName))
                 transactionName = LangItem;
-            using (TransactionGroup transactionGroup = new TransactionGroup(doc))
+            using (var transactionGroup = new TransactionGroup(doc))
             {
                 transactionGroup.Start($"{transactionName}: Groups");
 
-                foreach (IGrouping<string, ElInGroup> grouping in elementsInGroups.GroupBy(e => e.GroupName))
+                foreach (var grouping in elementsInGroups.GroupBy(e => e.GroupName))
                 {
-                    List<List<ElementId>> elements = new List<List<ElementId>>();
+                    var elements = new List<List<ElementId>>();
 
                     // ungroup and delete
-                    using (Transaction transaction = new Transaction(doc))
+                    using (var transaction = new Transaction(doc))
                     {
                         transaction.Start("Ungroup");
 
-                        foreach (ElInGroup elInGroup in grouping)
+                        foreach (var elInGroup in grouping)
                         {
                             var group = (Group) doc.GetElement(new ElementId(elInGroup.GroupId));
                             var grpElements = group.UngroupMembers().ToList();
@@ -393,7 +393,7 @@
 
                         transaction.Start("Numerate");
 
-                        foreach (ElInGroup elInGroup in grouping)
+                        foreach (var elInGroup in grouping)
                         {
                             foreach (var pair in elInGroup.Elements)
                             {
@@ -409,9 +409,9 @@
                         transaction.Start("Create new group");
                         var idsToDelete = new List<ElementId>();
                         GroupType createdGroup = null;
-                        foreach (List<ElementId> elementIds in elements)
+                        foreach (var elementIds in elements)
                         {
-                            Group newGroup = doc.Create.NewGroup(elementIds);
+                            var newGroup = doc.Create.NewGroup(elementIds);
                             if (createdGroup == null)
                             {
                                 createdGroup = new FilteredElementCollector(doc)
@@ -453,13 +453,13 @@
         /// <returns></returns>
         private List<Element> GetSortedElementsFromItemizedSchedule(ViewSchedule viewSchedule, List<Element> elements)
         {
-            List<Element> sortedElements = new List<Element>();
+            var sortedElements = new List<Element>();
 
             var builtInParameter = GetBuiltInParameterForElements(elements);
             if (builtInParameter == null)
                 return sortedElements;
 
-            using (SubTransaction transaction = new SubTransaction(viewSchedule.Document))
+            using (var transaction = new SubTransaction(viewSchedule.Document))
             {
                 transaction.Start();
 
@@ -481,10 +481,10 @@
 
                 // Ну и сама магия - просто читаем получившуюся спецификацию по ячейкам и получаем
                 // элементы уже в том порядке, в котором мы их видим в спецификации
-                TableSectionData sectionData = viewSchedule.GetTableData().GetSectionData(SectionType.Body);
-                for (int r = sectionData.FirstRowNumber; r <= sectionData.LastRowNumber; r++)
+                var sectionData = viewSchedule.GetTableData().GetSectionData(SectionType.Body);
+                for (var r = sectionData.FirstRowNumber; r <= sectionData.LastRowNumber; r++)
                 {
-                    for (int c = sectionData.FirstColumnNumber; c <= sectionData.LastColumnNumber; c++)
+                    for (var c = sectionData.FirstColumnNumber; c <= sectionData.LastColumnNumber; c++)
                     {
                         var cellValue = viewSchedule.GetCellText(SectionType.Body, r, c);
                         if (cellValue.Contains(separator))
@@ -522,14 +522,14 @@
         /// <returns></returns>
         private List<ElInRow> GetSortedElementsFromNotItemizedSchedule(ViewSchedule viewSchedule, List<Element> elements)
         {
-            List<ElInRow> sortedElements = new List<ElInRow>();
+            var sortedElements = new List<ElInRow>();
 
             var builtInParameter = GetBuiltInParameterForElements(elements);
             if (builtInParameter == null)
                 return sortedElements;
 
             // запоминаю начальные значения в параметре
-            Dictionary<Element, string> cachedParameterValues = new Dictionary<Element, string>();
+            var cachedParameterValues = new Dictionary<Element, string>();
             elements.ForEach(e =>
             {
                 var parameter = e.get_Parameter(builtInParameter.Value);
@@ -542,7 +542,7 @@
 
             bool fieldAlreadyAdded;
 
-            using (SubTransaction transaction = new SubTransaction(viewSchedule.Document))
+            using (var transaction = new SubTransaction(viewSchedule.Document))
             {
                 transaction.Start();
 
@@ -561,11 +561,11 @@
 
                 // в зависимости от количества строк в таблице сразу заполняю коллекцию "болванками" и
                 // нахожу номер нужной колонки и первой строки
-                TableSectionData sectionData = viewSchedule.GetTableData().GetSectionData(SectionType.Body);
-                int rowNumber = 0;
-                for (int r = sectionData.FirstRowNumber; r <= sectionData.LastRowNumber; r++)
+                var sectionData = viewSchedule.GetTableData().GetSectionData(SectionType.Body);
+                var rowNumber = 0;
+                for (var r = sectionData.FirstRowNumber; r <= sectionData.LastRowNumber; r++)
                 {
-                    for (int c = sectionData.FirstColumnNumber; c <= sectionData.LastColumnNumber; c++)
+                    for (var c = sectionData.FirstColumnNumber; c <= sectionData.LastColumnNumber; c++)
                     {
                         var cellValue = viewSchedule.GetCellText(SectionType.Body, r, c);
                         if (cellValue.Contains(signalValue))
@@ -589,8 +589,8 @@
             // теперь выполняю итерацию по всем элементам
             for (var index = 0; index < elements.Count; index++)
             {
-                Element element = elements[index];
-                using (SubTransaction transaction = new SubTransaction(viewSchedule.Document))
+                var element = elements[index];
+                using (var transaction = new SubTransaction(viewSchedule.Document))
                 {
                     transaction.Start();
 
@@ -617,9 +617,9 @@
 
 
                 // теперь смотрю какая ячейка погасла
-                TableSectionData sectionData = viewSchedule.GetTableData().GetSectionData(SectionType.Body);
+                var sectionData = viewSchedule.GetTableData().GetSectionData(SectionType.Body);
                 var rowNumber = 0;
-                for (int r = startRowNumber; r <= sectionData.LastRowNumber; r++)
+                for (var r = startRowNumber; r <= sectionData.LastRowNumber; r++)
                 {
                     rowNumber++;
                     var cellValue = viewSchedule.GetCellText(SectionType.Body, r, columnNumber);
@@ -634,7 +634,7 @@
             }
 
             // восстанавливаю начальные значения параметров
-            using (SubTransaction transaction = new SubTransaction(viewSchedule.Document))
+            using (var transaction = new SubTransaction(viewSchedule.Document))
             {
                 transaction.Start();
 
@@ -659,9 +659,9 @@
         {
             BuiltInParameter? returnedBuiltInParameter = null;
 
-            foreach (BuiltInParameter builtInParameter in _allowableBuiltInParameter)
+            foreach (var builtInParameter in _allowableBuiltInParameter)
             {
-                foreach (Element element in elements)
+                foreach (var element in elements)
                 {
                     if (element.get_Parameter(builtInParameter) == null)
                     {
@@ -687,11 +687,11 @@
 
         private static void AddFieldToSchedule(ViewSchedule viewSchedule, BuiltInParameter builtInParameter, out bool fieldAlreadyAdded)
         {
-            IList<SchedulableField> schedulableFields = viewSchedule.Definition.GetSchedulableFields();
+            var schedulableFields = viewSchedule.Definition.GetSchedulableFields();
 
             fieldAlreadyAdded = false;
 
-            foreach (SchedulableField sf in schedulableFields)
+            foreach (var sf in schedulableFields)
             {
                 if (sf.FieldType != ScheduleFieldType.Instance)
                     continue;
@@ -699,12 +699,12 @@
                     continue;
 
                 //Get all schedule field ids
-                IList<ScheduleFieldId> ids = viewSchedule.Definition.GetFieldOrder();
-                foreach (ScheduleFieldId id in ids)
+                var ids = viewSchedule.Definition.GetFieldOrder();
+                foreach (var id in ids)
                 {
                     try
                     {
-                        ScheduleField scheduleField = viewSchedule.Definition.GetField(id);
+                        var scheduleField = viewSchedule.Definition.GetField(id);
                         if (scheduleField.GetSchedulableField() == sf)
                         {
                             fieldAlreadyAdded = true;
@@ -730,9 +730,9 @@
 
         private static void RemoveFieldFromSchedule(ViewSchedule viewSchedule, BuiltInParameter builtInParameter)
         {
-            IList<SchedulableField> schedulableFields = viewSchedule.Definition.GetSchedulableFields();
+            var schedulableFields = viewSchedule.Definition.GetSchedulableFields();
 
-            foreach (SchedulableField sf in schedulableFields)
+            foreach (var sf in schedulableFields)
             {
                 if (sf.FieldType != ScheduleFieldType.Instance)
                     continue;
@@ -740,12 +740,12 @@
                     continue;
 
                 //Get all schedule field ids
-                IList<ScheduleFieldId> ids = viewSchedule.Definition.GetFieldOrder();
-                foreach (ScheduleFieldId id in ids)
+                var ids = viewSchedule.Definition.GetFieldOrder();
+                foreach (var id in ids)
                 {
                     try
                     {
-                        ScheduleField scheduleField = viewSchedule.Definition.GetField(id);
+                        var scheduleField = viewSchedule.Definition.GetField(id);
                         if (scheduleField.GetSchedulableField() == sf)
                         {
                             viewSchedule.Definition.RemoveField(scheduleField.FieldId);
@@ -767,10 +767,10 @@
         {
             var sortedElements = new List<Element>();
 
-            Dictionary<Element, XYZ> points = new Dictionary<Element, XYZ>();
+            var points = new Dictionary<Element, XYZ>();
 
             // get points
-            foreach (Element element in elements)
+            foreach (var element in elements)
             {
                 var location = element.Location;
                 if (location is LocationPoint locationPoint)
@@ -783,9 +783,9 @@
                 }
             }
 
-            List<Dictionary<Element, XYZ>> rows = new List<Dictionary<Element, XYZ>>();
+            var rows = new List<Dictionary<Element, XYZ>>();
 
-            foreach (KeyValuePair<Element, XYZ> keyValuePair in points)
+            foreach (var keyValuePair in points)
             {
                 if (rows.Count == 0)
                 {
@@ -795,10 +795,10 @@
                 else
                 {
                     var hasAllowableRow = false;
-                    foreach (Dictionary<Element, XYZ> dictionary in rows)
+                    foreach (var dictionary in rows)
                     {
                         if (hasAllowableRow) break;
-                        foreach (XYZ xyz in dictionary.Values)
+                        foreach (var xyz in dictionary.Values)
                         {
                             if (Math.Abs(xyz.Y - keyValuePair.Value.Y) < 0.0001)
                             {
@@ -823,17 +823,17 @@
                 if (_locationOrder == LocationOrder.LeftToRightUpToDown ||
                     _locationOrder == LocationOrder.RightToLeftUpToDown)
                     rows.Reverse();
-                foreach (Dictionary<Element, XYZ> row in rows)
+                foreach (var row in rows)
                 {
                     if (_locationOrder == LocationOrder.LeftToRightDownToUp ||
                         _locationOrder == LocationOrder.LeftToRightUpToDown)
-                        foreach (KeyValuePair<Element, XYZ> keyValuePair in row.OrderBy(r => r.Value.X))
+                        foreach (var keyValuePair in row.OrderBy(r => r.Value.X))
                         {
                             sortedElements.Add(keyValuePair.Key);
                         }
                     else if (_locationOrder == LocationOrder.RightToLeftDownToUp ||
                              _locationOrder == LocationOrder.RightToLeftUpToDown)
-                        foreach (KeyValuePair<Element, XYZ> keyValuePair in row.OrderByDescending(r => r.Value.X))
+                        foreach (var keyValuePair in row.OrderByDescending(r => r.Value.X))
                         {
                             sortedElements.Add(keyValuePair.Key);
                         }

@@ -63,6 +63,9 @@
     <Reference Include="WindowsBase" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="..\mmOrderMarking_2015\CbParameter.cs">
+      <Link>CbParameter.cs</Link>
+    </Compile>
     <Compile Include="..\mmOrderMarking_2015\Command.cs">
       <Link>Command.cs</Link>
     </Compile>
