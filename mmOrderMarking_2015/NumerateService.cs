@@ -66,6 +66,7 @@
                     CollectElementsNotInSchedule(elNewMarks, elementsInGroups);
                 }
 
+                var readOnlyParameters = new List<int>();
                 if (elNewMarks.Any())
                 {
                     var transactionName = Language.GetFunctionLocalName(LangItem, new ModPlusConnector().LName);
@@ -78,20 +79,32 @@
                         {
                             if (e.Element.LookupParameter(_parameterName) is Parameter parameter)
                             {
-                                parameter.Set(e.Mark);
+                                if (parameter.IsReadOnly)
+                                    readOnlyParameters.Add(e.Element.Id.IntegerValue);
+                                else parameter.Set(e.Mark);
                             }
                             else
                             {
                                 var t = e.Element.Document.GetElement(e.Element.GetTypeId());
                                 if (t != null && t.LookupParameter(_parameterName) is Parameter p)
                                 {
-                                    p.Set(e.Mark);
+                                    if (p.IsReadOnly)
+                                        readOnlyParameters.Add(e.Element.Id.IntegerValue);
+                                    else p.Set(e.Mark);
                                 }
                             }
                         }
 
                         transaction.Commit();
                     }
+                }
+
+                if (readOnlyParameters.Any())
+                {
+                    ModPlusAPI.IO.String.ShowTextWithNotepad(
+                        $"{Language.GetItem(LangItem, "h14")} \"{_parameterName}\" {Language.GetItem(LangItem, "h15")}:" +
+                        $"\n{string.Join(",", readOnlyParameters.Distinct())}",
+                        LangItem);
                 }
 
                 if (elementsInGroups.Any() && _numberingInGroups)
