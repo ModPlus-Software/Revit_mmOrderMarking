@@ -81,7 +81,8 @@
                             {
                                 if (parameter.IsReadOnly)
                                     readOnlyParameters.Add(e.Element.Id.IntegerValue);
-                                else parameter.Set(e.Mark);
+                                else
+                                    parameter.Set(e.Mark);
                             }
                             else
                             {
@@ -90,7 +91,8 @@
                                 {
                                     if (p.IsReadOnly)
                                         readOnlyParameters.Add(e.Element.Id.IntegerValue);
-                                    else p.Set(e.Mark);
+                                    else
+                                        p.Set(e.Mark);
                                 }
                             }
                         }
@@ -292,8 +294,8 @@
             int i,
             int elementsCount,
             Element e,
-            List<ElNewMark> elNewMarks,
-            List<ElInGroup> elementsInGroups,
+            ICollection<ElNewMark> elNewMarks,
+            ICollection<ElInGroup> elementsInGroups,
             Document doc)
         {
             var markValue = _orderDirection == OrderDirection.Ascending
@@ -533,7 +535,7 @@
         /// <param name="viewSchedule">Вид спецификации</param>
         /// <param name="elements">Элементы, полученные с этого вида</param>
         /// <returns></returns>
-        private List<ElInRow> GetSortedElementsFromNotItemizedSchedule(ViewSchedule viewSchedule, List<Element> elements)
+        private IEnumerable<ElInRow> GetSortedElementsFromNotItemizedSchedule(ViewSchedule viewSchedule, List<Element> elements)
         {
             var sortedElements = new List<ElInRow>();
 
@@ -610,6 +612,7 @@
                     if (index != 0)
                     {
                         var parameter = elements[index - 1].get_Parameter(builtInParameter.Value);
+
                         // возвращаю элементу значение в параметр
                         parameter.Set(signalValue);
                     }
@@ -626,7 +629,6 @@
 
                     transaction.Commit();
                 }
-
 
 
                 // теперь смотрю какая ячейка погасла
@@ -711,7 +713,7 @@
                 if (sf.ParameterId.IntegerValue != (int)builtInParameter)
                     continue;
 
-                //Get all schedule field ids
+                // Get all schedule field ids
                 var ids = viewSchedule.Definition.GetFieldOrder();
                 foreach (var id in ids)
                 {
@@ -752,7 +754,7 @@
                 if (sf.ParameterId.IntegerValue != (int)builtInParameter)
                     continue;
 
-                //Get all schedule field ids
+                // Get all schedule field ids
                 var ids = viewSchedule.Definition.GetFieldOrder();
                 foreach (var id in ids)
                 {
@@ -787,7 +789,9 @@
             {
                 var location = element.Location;
                 if (location is LocationPoint locationPoint)
+                {
                     points.Add(element, locationPoint.Point);
+                }
                 else if (location is LocationCurve locationCurve)
                 {
                     points.Add(
@@ -810,7 +814,8 @@
                     var hasAllowableRow = false;
                     foreach (var dictionary in rows)
                     {
-                        if (hasAllowableRow) break;
+                        if (hasAllowableRow)
+                            break;
                         foreach (var xyz in dictionary.Values)
                         {
                             if (Math.Abs(xyz.Y - keyValuePair.Value.Y) < 0.0001)
@@ -840,16 +845,20 @@
                 {
                     if (_locationOrder == LocationOrder.LeftToRightDownToUp ||
                         _locationOrder == LocationOrder.LeftToRightUpToDown)
+                    {
                         foreach (var keyValuePair in row.OrderBy(r => r.Value.X))
                         {
                             sortedElements.Add(keyValuePair.Key);
                         }
+                    }
                     else if (_locationOrder == LocationOrder.RightToLeftDownToUp ||
                              _locationOrder == LocationOrder.RightToLeftUpToDown)
+                    {
                         foreach (var keyValuePair in row.OrderByDescending(r => r.Value.X))
                         {
                             sortedElements.Add(keyValuePair.Key);
                         }
+                    }
                 }
             }
 

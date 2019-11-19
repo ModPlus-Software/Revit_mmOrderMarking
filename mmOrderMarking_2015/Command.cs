@@ -7,12 +7,14 @@
     using ModPlusAPI;
     using ModPlusAPI.Windows;
 
+    /// <inheritdoc />
     [Transaction(TransactionMode.Manual)]
     [Regeneration(RegenerationOption.Manual)]
     public class Command : IExternalCommand
     {
         private WinScheduleAutoNum _window;
 
+        /// <inheritdoc />
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
             Statistic.SendCommandStarting(new ModPlusConnector());
@@ -34,9 +36,11 @@
                 _window = new WinScheduleAutoNum(commandData);
                 _window.Closed += (sender, args) => _window = null;
             }
+
             if (_window.IsLoaded)
                 _window.Activate();
-            else _window.ShowDialog();
+            else 
+                _window.ShowDialog();
 
             return Result.Succeeded;
         }

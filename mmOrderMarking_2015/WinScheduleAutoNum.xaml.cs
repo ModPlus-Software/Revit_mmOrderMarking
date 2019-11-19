@@ -40,6 +40,7 @@
                 {
                     var instanceParameters = element.Parameters.Cast<Parameter>().ToList();
                     var typeParameters = new List<Parameter>();
+
                     // Если снята галочка "Для каждого экземпляра", то добавляем параметры типа
                     if (!viewSchedule.Definition.IsItemized)
                     {
@@ -62,6 +63,7 @@
                             {
                                 cbParameters.Add(new CbParameter(instParamDescription, parameter));
                             }
+
                             parameter = typeParameters.FirstOrDefault(p => p.Id == schedulableField.ParameterId);
                             if (parameter != null && parameter.StorageType == StorageType.String && !parameter.IsReadOnly)
                             {
@@ -79,7 +81,10 @@
                             ? cbParameters.IndexOf(markParameter)
                             : 0;
                     }
-                    else CbParameters.SelectedIndex = 0;
+                    else
+                    {
+                        CbParameters.SelectedIndex = 0;
+                    }
                 }
             }
             else
@@ -105,7 +110,7 @@
                     _commandData,
                     TbPrefix.Text,
                     TbSuffix.Text,
-                    // ReSharper disable once PossibleInvalidOperationException
+                    //// ReSharper disable once PossibleInvalidOperationException
                     (int)TbStartValue.Value.Value,
                     CbOrderBy.SelectedIndex == 1 ? OrderDirection.Descending : OrderDirection.Ascending,
                     parameterName,
@@ -171,7 +176,7 @@
             UserConfigFile.SetValue(LangItem, "StartValue", TbStartValue.Value.ToString(), false);
             UserConfigFile.SetValue(LangItem, "OrderBy", CbOrderBy.SelectedIndex.ToString(), false);
             UserConfigFile.SetValue(LangItem, "Direction", CbDirection.SelectedIndex.ToString(), false);
-            UserConfigFile.SetValue(LangItem, "NumberingInGroups", (ChkNumberingInGroups.IsChecked != null && ChkNumberingInGroups.IsChecked.Value).ToString(), false);
+            UserConfigFile.SetValue(LangItem, "NumberingInGroups", ChkNumberingInGroups.IsChecked.ToString(), false);
             if (CbParameters.SelectedItem is CbParameter cbParameter)
                 UserConfigFile.SetValue(LangItem, "SelectedParameter", cbParameter.Name, false);
             UserConfigFile.SaveConfigFile();
