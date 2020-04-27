@@ -12,8 +12,6 @@
     [Regeneration(RegenerationOption.Manual)]
     public class Command : IExternalCommand
     {
-        private WinScheduleAutoNum _window;
-
         /// <inheritdoc />
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
@@ -30,17 +28,11 @@
                 }
             }
 
-            // Working with window WPF
-            if (_window == null)
-            {
-                _window = new WinScheduleAutoNum(commandData);
-                _window.Closed += (sender, args) => _window = null;
-            }
-
-            if (_window.IsLoaded)
-                _window.Activate();
-            else 
-                _window.ShowDialog();
+            var window = new WinScheduleAutoNum();
+            var context = new MainViewModel(window, commandData.Application);
+            window.DataContext = context;
+            window.ContentRendered += (sender, args) => context.Init();
+            window.ShowDialog();
 
             return Result.Succeeded;
         }
