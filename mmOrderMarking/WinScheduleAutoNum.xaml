@@ -1,114 +1,149 @@
-﻿<mps:ModPlusWindow x:Class="mmOrderMarking.WinScheduleAutoNum"
-                      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-                      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-                      xmlns:mps="https://modplus.org/winfx/xaml/controls"
-                      xmlns:mmOrderMarking="clr-namespace:mmOrderMarking"
-                      SizeToContent="WidthAndHeight"
-                      ResizeMode="NoResize"
-                   Loaded="WinScheduleAutoNum_OnLoaded"
-                   Closing="WinScheduleAutoNum_OnClosing">
+﻿<mps:ModPlusWindow
+    x:Class="mmOrderMarking.WinScheduleAutoNum"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+    xmlns:mps="https://modplus.org/winfx/xaml/controls"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+    xmlns:mmOrderMarking="clr-namespace:mmOrderMarking" 
+    xmlns:converters="clr-namespace:mmOrderMarking.Converters" 
+    xmlns:apiConverters="clr-namespace:ModPlusAPI.Converters;assembly=ModPlusAPI"
+    xmlns:enums="clr-namespace:mmOrderMarking.Enums"
+    mc:Ignorable="d"
+    SizeToContent="Height" Width="400"
+    ResizeMode="NoResize"
+    d:DataContext="{d:DesignInstance mmOrderMarking:MainViewModel, IsDesignTimeCreatable=False}">
     <Window.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary Source="pack://application:,,,/ModPlusStyle;component/Styles/Controls.xaml"></ResourceDictionary>
             </ResourceDictionary.MergedDictionaries>
             <XmlDataProvider x:Key="Lang" Source="E:/ModPlus/Languages/en-US.xml" XPath="ModPlus/mmOrderMarking"></XmlDataProvider>
+            <converters:EnumToIntConverter x:Key="EnumToIntConverter"/>
+            <apiConverters:BooleanToVisibilityConverter 
+                x:Key="TrueToVisibleConverter" TrueVisibility="Visible" FalseVisibility="Collapsed"/>
+            <apiConverters:BooleanToVisibilityConverter 
+                x:Key="FalseToVisibleConverter" TrueVisibility="Collapsed" FalseVisibility="Visible"/>
         </ResourceDictionary>
     </Window.Resources>
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"></RowDefinition>
-            <RowDefinition Height="Auto"></RowDefinition>
-            <RowDefinition Height="Auto"></RowDefinition>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
-        <Grid Grid.Row="0" HorizontalAlignment="Left">
+
+        <Grid Grid.Row="0">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="143"></ColumnDefinition>
+                <ColumnDefinition Width="*"></ColumnDefinition>
                 <ColumnDefinition Width="Auto"></ColumnDefinition>
-                <ColumnDefinition Width="143"></ColumnDefinition>
+                <ColumnDefinition Width="*"></ColumnDefinition>
             </Grid.ColumnDefinitions>
-            <TextBox Name="TbPrefix"
-                     Grid.Row="0" Grid.Column="0"
+            <TextBox Grid.Row="0" Grid.Column="0"
+                     Text="{Binding Path=Prefix, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                     IsEnabled="{Binding Path=IsEnabledPrefixAndSuffix}"
                      mps:HintAssist.IsFloating="True"
                      mps:HintAssist.Hint="{Binding Source={StaticResource Lang}, XPath=h1}"
                      mps:TextFieldAssist.ClearTextButton="True"></TextBox>
-            <TextBlock Grid.Row="0" Grid.Column="1"
-                       Text="{Binding Source={StaticResource Lang}, XPath=h2}"
-                       Margin="4 18 5 4"></TextBlock>
-            <TextBox Name="TbSuffix"
-                     Grid.Row="0" Grid.Column="2" 
+            <TextBlock Grid.Row="0" Grid.Column="1" VerticalAlignment="Center"
+                       Margin="4 18 4 4"
+                       Text="{Binding Source={StaticResource Lang}, XPath=h2}"/>
+            <TextBox Grid.Row="0" Grid.Column="2" 
+                     Text="{Binding Path=Suffix, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                     IsEnabled="{Binding Path=IsEnabledPrefixAndSuffix}"
                      mps:HintAssist.IsFloating="True"
                      mps:HintAssist.Hint="{Binding Source={StaticResource Lang}, XPath=h3}"
                      mps:TextFieldAssist.ClearTextButton="True"/>
         </Grid>
-        <GroupBox Grid.Row="1" Padding="4 0 0 0"
+        
+        <GroupBox Grid.Row="1"
                   Header="{Binding Source={StaticResource Lang}, XPath=h6}">
             <Grid>
                 <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="200"/>
                 </Grid.ColumnDefinitions>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
+
+                <!-- start value -->
                 <TextBlock Grid.Row="0" Grid.Column="0" 
                            Text="{Binding Source={StaticResource Lang}, XPath=h7}"></TextBlock>
                 <mps:NumericBox Grid.Row="0" Grid.Column="1" Minimum="0"
-                                Name="TbStartValue"
+                                Value="{Binding Path=StartValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                 NumericInputMode="Numbers"></mps:NumericBox>
+
+                <!-- direction -->
                 <TextBlock Grid.Row="1" Grid.Column="0" 
-                           Text="{Binding Source={StaticResource Lang}, XPath=h8}"></TextBlock>
-                <ComboBox Grid.Row="1" Grid.Column="1" Name="CbOrderBy">
-                    <ComboBoxItem Content="{Binding Source={StaticResource Lang}, XPath=o1}"></ComboBoxItem>
-                    <ComboBoxItem Content="{Binding Source={StaticResource Lang}, XPath=o2}"></ComboBoxItem>
+                           Text="{Binding Source={StaticResource Lang}, XPath=h8}"/>
+
+                <!-- direction for schedule -->
+                <ComboBox Grid.Row="1" Grid.Column="1"
+                          SelectedIndex="{Binding Path=ScheduleOrderDirection, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged,
+                    Converter={StaticResource EnumToIntConverter}, ConverterParameter={x:Type enums:OrderDirection}}"
+                          Visibility="{Binding Path=IsScheduleView, Converter={StaticResource TrueToVisibleConverter}}">
+                    <!-- Ascending -->
+                    <ComboBoxItem Content="{Binding Source={StaticResource Lang}, XPath=o1}"/>
+                    <!-- Descending -->
+                    <ComboBoxItem Content="{Binding Source={StaticResource Lang}, XPath=o2}"/>
                 </ComboBox>
-                <ComboBox Grid.Row="1" Grid.Column="1" Name="CbDirection">
-                    <ComboBoxItem Content="{Binding Source={StaticResource Lang}, XPath=d1}"></ComboBoxItem>
-                    <ComboBoxItem Content="{Binding Source={StaticResource Lang}, XPath=d2}"></ComboBoxItem>
-                    <ComboBoxItem Content="{Binding Source={StaticResource Lang}, XPath=d3}"></ComboBoxItem>
-                    <ComboBoxItem Content="{Binding Source={StaticResource Lang}, XPath=d4}"></ComboBoxItem>
-                    <ComboBoxItem Content="{Binding Source={StaticResource Lang}, XPath=d5}"></ComboBoxItem>
+
+                <!-- direction for standard view -->
+                <ComboBox Grid.Row="1" Grid.Column="1" Name="CbDirection"
+                          SelectedIndex="{Binding Path=LocationOrder, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged,
+                    Converter={StaticResource EnumToIntConverter}, ConverterParameter={x:Type enums:LocationOrder}}"
+                          Visibility="{Binding Path=IsScheduleView, Converter={StaticResource FalseToVisibleConverter}}">
+                    <ComboBoxItem Content="{Binding Source={StaticResource Lang}, XPath=d1}"/>
+                    <ComboBoxItem Content="{Binding Source={StaticResource Lang}, XPath=d2}"/>
+                    <ComboBoxItem Content="{Binding Source={StaticResource Lang}, XPath=d3}"/>
+                    <ComboBoxItem Content="{Binding Source={StaticResource Lang}, XPath=d4}"/>
+                    <ComboBoxItem Content="{Binding Source={StaticResource Lang}, XPath=d5}"/>
                 </ComboBox>
+
+                <!-- parameter -->
                 <TextBlock Grid.Row="2" Grid.Column="0" 
-                           Text="{Binding Source={StaticResource Lang}, XPath=h9}"></TextBlock>
-                <TextBox Grid.Row="2" Grid.Column="1" Name="TbParameter"></TextBox>
-                <ComboBox Grid.Row="2" Grid.Column="1" Name="CbParameters">
+                           Text="{Binding Source={StaticResource Lang}, XPath=h9}"/>
+
+                <!-- by schedule parameter -->
+                <ComboBox Grid.Row="2" Grid.Column="1"
+                          ItemsSource="{Binding Path=ScheduleParameters}"
+                          SelectedItem="{Binding Path=ScheduleParameter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                          Visibility="{Binding Path=IsScheduleView, Converter={StaticResource TrueToVisibleConverter}}">
                     <ComboBox.ItemTemplate>
-                        <DataTemplate DataType="mmOrderMarking:CbParameter">
+                        <DataTemplate DataType="mmOrderMarking:ExtParameter">
                             <StackPanel Orientation="Vertical">
-                                <TextBlock Text="{Binding Path=Name}"></TextBlock>
-                                <TextBlock Text="{Binding Path=Description}" FontSize="10"></TextBlock>
+                                <TextBlock Text="{Binding Path=Name}"/>
+                                <TextBlock Text="{Binding Path=Description}" FontSize="10"/>
                             </StackPanel>
                         </DataTemplate>
                     </ComboBox.ItemTemplate>
                 </ComboBox>
+
+                <!-- by element location parameter -->
+                <TextBox Grid.Row="2" Grid.Column="1" 
+                         Text="{Binding Path=ParameterName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                         Visibility="{Binding Path=IsScheduleView, Converter={StaticResource FalseToVisibleConverter}}"/>
+                
             </Grid>
         </GroupBox>
+       
         <Grid Grid.Row="2">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
-            </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
-            <CheckBox Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2"
-                      Content="{Binding Source={StaticResource Lang}, XPath=h10}"
-                      ToolTip="{Binding Source={StaticResource Lang}, XPath=h11}"
-                      ToolTipService.InitialShowDelay="0"
-                      ToolTipService.ShowDuration="15000"
-                      Name="ChkNumberingInGroups"></CheckBox>
-            <Button Grid.Column="0" Grid.Row="1"
+            <Button Grid.Column="0"
                     Content="{Binding Source={StaticResource Lang}, XPath=h4}" HorizontalAlignment="Left"
-                    Name="Do" Click="Do_Click"
+                    Command="{Binding Path=NumerateCommand}"
                     ToolTipService.InitialShowDelay="0"
-                    ToolTipService.ShowOnDisabled="True"></Button>
-            <Button Grid.Column="1" Grid.Row="1"
+                    ToolTipService.ShowOnDisabled="True"/>
+            <Button Grid.Column="1"
                     Content="{Binding Source={StaticResource Lang}, XPath=h5}" HorizontalAlignment="Right"
-                    Name="Clear" Click="Clear_Click"></Button>
+                    IsEnabled="{Binding Path=IsEnabledPrefixAndSuffix}"
+                    Command="{Binding Path=ClearCommand}"/>
         </Grid>
     </Grid>
 </mps:ModPlusWindow>

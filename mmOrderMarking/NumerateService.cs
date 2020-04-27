@@ -14,6 +14,8 @@
 
     public class NumerateService
     {
+        private const string LangItem = "mmAutoMarking";
+        private readonly UIApplication _uiApplication;
         private readonly ExternalCommandData _commandData;
         private readonly string _prefix;
         private readonly string _suffix;
@@ -22,26 +24,110 @@
         private readonly string _parameterName;
         private readonly LocationOrder _locationOrder;
         private readonly bool _numberingInGroups;
-        private const string LangItem = "mmAutoMarking";
+        private readonly List<BuiltInParameter> _allowableBuiltInParameter = new List<BuiltInParameter>
+        {
+            BuiltInParameter.ALL_MODEL_INSTANCE_COMMENTS,
+            BuiltInParameter.SHEET_NAME
+        };
 
-        public NumerateService(
-            ExternalCommandData commandData,
+        public NumerateService(UIApplication uiApplication)
+        {
+            _uiApplication = uiApplication;
+        }
+
+        public void NumerateInSchedule(
+            ExtParameter extParameter,
             string prefix,
             string suffix,
             int startValue,
-            OrderDirection orderDirection,
-            string parameterName,
-            LocationOrder locationOrder,
-            bool numberingInGroups)
+            OrderDirection orderDirection)
         {
-            _commandData = commandData;
-            _prefix = prefix;
-            _suffix = suffix;
-            _startValue = startValue;
-            _orderDirection = orderDirection;
-            _parameterName = parameterName;
-            _locationOrder = locationOrder;
-            _numberingInGroups = numberingInGroups;
+
+        }
+
+        public void NumerateInView(
+            string parameterName, 
+            string prefix,
+            string suffix,
+            int startValue,
+            LocationOrder locationOrder)
+        {
+
+        }
+
+        /// <summary>
+        /// Удаление значения текстового параметра на виде, являющимся видом спецификации
+        /// </summary>
+        /// <param name="extParameter">Текстовый параметр</param>
+        public void ClearInSchedule(ExtParameter extParameter)
+        {
+            if (extParameter.IsDouble)
+                return;
+
+            var doc = _uiApplication.ActiveUIDocument.Document;
+            if (doc.ActiveView is ViewSchedule viewSchedule)
+            {
+                var listElements = new FilteredElementCollector(doc, viewSchedule.Id)
+                    .Where(e => e.LookupParameter(extParameter.Name) != null);
+
+                ClearStringParameter(listElements, extParameter.Name);
+            }
+        }
+
+        /// <summary>
+        /// Удаление значения текстового параметра у элементов на виде, не являющимся спецификацией
+        /// </summary>
+        /// <param name="parameterName">Имя текстового параметра</param>
+        public void ClearInView(string parameterName)
+        {
+            var uiDoc = _uiApplication.ActiveUIDocument;
+            var doc = uiDoc.Document;
+            
+            var listElements = new List<Element>();
+            var elementIds = uiDoc.Selection.GetElementIds();
+            if (elementIds.Any())
+            {
+                listElements.AddRange(elementIds.Select(elementId => doc.GetElement(elementId)));
+            }
+            else
+            {
+                try
+                {
+                    var selectedElements =
+                        uiDoc.Selection.PickElementsByRectangle(Language.GetItem(LangItem, "m1"));
+                    listElements = selectedElements.ToList();
+                }
+                catch (Autodesk.Revit.Exceptions.OperationCanceledException)
+                {
+                    // ignore
+                }
+            }
+
+            ClearStringParameter(listElements, parameterName);
+        }
+
+        private void ClearStringParameter(IEnumerable<Element> listElements, string parameterName)
+        {
+            var uiDoc = _uiApplication.ActiveUIDocument;
+            var doc = uiDoc.Document;
+            var transactionName = Language.GetFunctionLocalName(LangItem, new ModPlusConnector().LName);
+            if (string.IsNullOrEmpty(transactionName))
+                transactionName = LangItem;
+            using (var transaction = new Transaction(doc))
+            {
+                if (transaction.Start(transactionName) == TransactionStatus.Started)
+                {
+                    foreach (var pickedElement in listElements)
+                    {
+                        if (pickedElement.LookupParameter(parameterName) is Parameter parameter)
+                        {
+                            parameter.Set(string.Empty);
+                        }
+                    }
+                }
+
+                transaction.Commit();
+            }
         }
 
         public void ProceedNumeration()
@@ -121,67 +207,11 @@
             }
         }
 
-        public static void ScheduleAutoDel(
+        public void ScheduleAutoDel(
             ExternalCommandData commandData,
             string parameterName)
         {
-            var uiApp = commandData.Application;
-            var uiDoc = uiApp.ActiveUIDocument;
-            var doc = uiDoc.Document;
-            var transactionName = Language.GetFunctionLocalName(LangItem, new ModPlusConnector().LName);
-            if (string.IsNullOrEmpty(transactionName))
-                transactionName = LangItem;
-            using (var transaction = new Transaction(doc))
-            {
-                if (transaction.Start(transactionName) == TransactionStatus.Started)
-                {
-                    var currentView = uiDoc.ActiveView;
-                    var listElements = new List<Element>();
-                    if (currentView.ViewType == ViewType.Schedule)
-                    {
-                        if (commandData.View is ViewSchedule viewSchedule)
-                        {
-                            listElements = new FilteredElementCollector(doc, viewSchedule.Id)
-                                .Where(e => e.LookupParameter(parameterName) != null)
-                                .ToList();
-                        }
-                    }
-                    else
-                    {
-                        var elementIds = uiDoc.Selection.GetElementIds();
-                        if (elementIds.Any())
-                        {
-                            foreach (var elementId in elementIds)
-                            {
-                                listElements.Add(doc.GetElement(elementId));
-                            }
-                        }
-                        else
-                        {
-                            try
-                            {
-                                var selectedElements =
-                                    uiDoc.Selection.PickElementsByRectangle(Language.GetItem(LangItem, "m1"));
-                                listElements = selectedElements.ToList();
-                            }
-                            catch (Autodesk.Revit.Exceptions.OperationCanceledException)
-                            {
-                                // ignore
-                            }
-                        }
-                    }
-
-                    foreach (var pickedElement in listElements)
-                    {
-                        if (pickedElement.LookupParameter(parameterName) is Parameter parameter)
-                        {
-                            parameter.Set(string.Empty);
-                        }
-                    }
-                }
-
-                transaction.Commit();
-            }
+            
         }
 
         private void CollectElementsInSchedule(
@@ -693,13 +723,7 @@
 
             return returnedBuiltInParameter;
         }
-
-        private readonly List<BuiltInParameter> _allowableBuiltInParameter = new List<BuiltInParameter>
-        {
-            BuiltInParameter.ALL_MODEL_INSTANCE_COMMENTS,
-            BuiltInParameter.SHEET_NAME
-        };
-
+        
         private static void AddFieldToSchedule(ViewSchedule viewSchedule, BuiltInParameter builtInParameter, out bool fieldAlreadyAdded)
         {
             var schedulableFields = viewSchedule.Definition.GetSchedulableFields();
