@@ -1,4 +1,4 @@
-﻿namespace mmOrderMarking
+﻿namespace mmOrderMarking.Models
 {
     using Autodesk.Revit.DB;
 
@@ -17,7 +17,7 @@
             Name = parameter.Definition.Name;
             Description = description;
             Parameter = parameter;
-            IsDouble = parameter.StorageType == StorageType.Double;
+            IsNumeric = parameter.StorageType != StorageType.String;
         }
 
         /// <summary>
@@ -33,7 +33,7 @@
         /// <summary>
         /// Параметр содержит числовое значение
         /// </summary>
-        public bool IsDouble { get; }
+        public bool IsNumeric { get; }
 
         /// <summary>
         /// Параметр Revit
@@ -50,6 +50,29 @@
             if (Parameter.Definition is InternalDefinition internalDefinition &&
                 internalDefinition.BuiltInParameter == builtInParameter)
                 return true;
+            return false;
+        }
+
+        /// <summary>
+        /// Является ли параметр валидным для обработки
+        /// </summary>
+        /// <param name="parameter">Параметр Revit</param>
+        public static bool IsValid(Parameter parameter)
+        {
+            if (parameter == null)
+                return false;
+            if (parameter.IsReadOnly)
+                return false;
+            if (parameter.StorageType == StorageType.String)
+                return true;
+
+            if (parameter.StorageType == StorageType.Integer &&
+                parameter.Definition.ParameterType != ParameterType.YesNo)
+                return true;
+
+            if (parameter.StorageType == StorageType.Double)
+                return true;
+
             return false;
         }
     }

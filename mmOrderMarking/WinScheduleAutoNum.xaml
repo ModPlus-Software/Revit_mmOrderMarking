@@ -9,6 +9,7 @@
     xmlns:converters="clr-namespace:mmOrderMarking.Converters" 
     xmlns:apiConverters="clr-namespace:ModPlusAPI.Converters;assembly=ModPlusAPI"
     xmlns:enums="clr-namespace:mmOrderMarking.Enums"
+    xmlns:models="clr-namespace:mmOrderMarking.Models"
     mc:Ignorable="d"
     SizeToContent="Height" Width="400"
     ResizeMode="NoResize"
@@ -82,7 +83,7 @@
 
                 <!-- direction for schedule -->
                 <ComboBox Grid.Row="1" Grid.Column="1"
-                          SelectedIndex="{Binding Path=ScheduleOrderDirection, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged,
+                          SelectedIndex="{Binding Path=OrderDirection, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged,
                     Converter={StaticResource EnumToIntConverter}, ConverterParameter={x:Type enums:OrderDirection}}"
                           Visibility="{Binding Path=IsScheduleView, Converter={StaticResource TrueToVisibleConverter}}">
                     <!-- Ascending -->
@@ -113,7 +114,7 @@
                           SelectedItem="{Binding Path=ScheduleParameter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                           Visibility="{Binding Path=IsScheduleView, Converter={StaticResource TrueToVisibleConverter}}">
                     <ComboBox.ItemTemplate>
-                        <DataTemplate DataType="mmOrderMarking:ExtParameter">
+                        <DataTemplate DataType="models:ExtParameter">
                             <StackPanel Orientation="Vertical">
                                 <TextBlock Text="{Binding Path=Name}"/>
                                 <TextBlock Text="{Binding Path=Description}" FontSize="10"/>

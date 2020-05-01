@@ -8,10 +8,10 @@
     using Autodesk.Revit.DB;
     using Autodesk.Revit.UI;
     using Enums;
+    using Models;
     using ModPlusAPI;
     using ModPlusAPI.Mvvm;
     using ModPlusAPI.Windows;
-    using Visibility = System.Windows.Visibility;
 
     /// <summary>
     /// Главный контекст плагина
@@ -26,7 +26,7 @@
         private string _suffix;
         private bool _isEnabledPrefixAndSuffix = true;
         private int _startValue;
-        private OrderDirection _scheduleOrderDirection = OrderDirection.Ascending;
+        private OrderDirection _orderDirection = OrderDirection.Ascending;
         private LocationOrder _locationOrder = LocationOrder.Creation;
         private ExtParameter _scheduleParameter;
         private string _parameterName;
@@ -59,7 +59,7 @@
                 OnPropertyChanged();
             }
         }
-        
+
         /// <summary>
         /// Префикс марки
         /// </summary>
@@ -124,18 +124,18 @@
         }
 
         /// <summary>
-        /// Направление нумерации для спецификаций
+        /// Направление нумерации 
         /// </summary>
-        public OrderDirection ScheduleOrderDirection
+        public OrderDirection OrderDirection
         {
-            get => _scheduleOrderDirection;
+            get => _orderDirection;
             set
             {
-                if (_scheduleOrderDirection == value)
+                if (_orderDirection == value)
                     return;
-                _scheduleOrderDirection = value;
+                _orderDirection = value;
                 OnPropertyChanged();
-                UserConfigFile.SetValue(LangItem, nameof(ScheduleOrderDirection), value.ToString(), false);
+                UserConfigFile.SetValue(LangItem, nameof(OrderDirection), value.ToString(), false);
             }
         }
 
@@ -171,7 +171,7 @@
                 if (_scheduleParameter == value)
                     return;
                 _scheduleParameter = value;
-                IsEnabledPrefixAndSuffix = !value.IsDouble;
+                IsEnabledPrefixAndSuffix = !value.IsNumeric;
                 OnPropertyChanged();
                 UserConfigFile.SetValue(LangItem, nameof(ScheduleParameter), value.Name, true);
             }
@@ -189,6 +189,7 @@
                     return;
                 _parameterName = value;
                 OnPropertyChanged();
+                UserConfigFile.SetValue(LangItem, nameof(ParameterName), value, true);
             }
         }
 
@@ -199,12 +200,19 @@
         {
             try
             {
-                _parentWindow.Visibility = Visibility.Hidden;
+                _parentWindow.Hide();
 
                 if (IsScheduleView)
-                    _numerateService.NumerateInSchedule(ScheduleParameter, Prefix, Suffix, StartValue, ScheduleOrderDirection);
+                {
+                    _numerateService.NumerateInSchedule(new NumerateData(
+                        ScheduleParameter.Name, StartValue, Prefix, Suffix, 
+                        OrderDirection, LocationOrder, ScheduleParameter.IsNumeric));
+                }
                 else
-                    _numerateService.NumerateInView(ParameterName, Prefix, Suffix, StartValue, LocationOrder);
+                {
+                    _numerateService.NumerateInView(new NumerateData(
+                        ParameterName, StartValue, Prefix, Suffix, OrderDirection.Ascending, LocationOrder, false));
+                }
             }
             catch (Exception exception)
             {
@@ -212,7 +220,7 @@
             }
             finally
             {
-                _parentWindow.Visibility = Visibility.Visible;
+                _parentWindow.ShowDialog();
             }
         });
 
@@ -223,11 +231,11 @@
         {
             try
             {
-                _parentWindow.Visibility = Visibility.Hidden;
+                _parentWindow.Hide();
 
                 if (IsScheduleView)
                     _numerateService.ClearInSchedule(ScheduleParameter);
-                else 
+                else
                     _numerateService.ClearInView(ParameterName);
             }
             catch (Exception exception)
@@ -236,7 +244,7 @@
             }
             finally
             {
-                _parentWindow.Visibility = Visibility.Visible;
+                _parentWindow.ShowDialog();
             }
         });
 
@@ -264,7 +272,7 @@
                     // Если снята галочка "Для каждого экземпляра", то добавляем параметры типа
                     if (!viewSchedule.Definition.IsItemized)
                     {
-                        var t = viewSchedule.Document.GetElement(element.GetTypeId());
+                        var t = doc.GetElement(element.GetTypeId());
                         if (t != null)
                         {
                             typeParameters.AddRange(t.Parameters.Cast<Parameter>());
@@ -273,21 +281,17 @@
 
                     foreach (var schedulableField in viewSchedule.Definition.GetSchedulableFields())
                     {
-                        if (schedulableField.FieldType != ScheduleFieldType.Instance) 
+                        if (schedulableField.FieldType != ScheduleFieldType.Instance)
                             continue;
 
                         var parameter = instanceParameters.FirstOrDefault(p => p.Id == schedulableField.ParameterId);
-                        if (parameter != null &&
-                            (parameter.StorageType == StorageType.String || parameter.StorageType == StorageType.Double) &&
-                            !parameter.IsReadOnly)
+                        if (ExtParameter.IsValid(parameter))
                         {
                             ScheduleParameters.Add(new ExtParameter(instParamDescription, parameter));
                         }
 
                         parameter = typeParameters.FirstOrDefault(p => p.Id == schedulableField.ParameterId);
-                        if (parameter != null &&
-                            (parameter.StorageType == StorageType.String || parameter.StorageType == StorageType.Double) &&
-                            !parameter.IsReadOnly)
+                        if (ExtParameter.IsValid(parameter))
                         {
                             ScheduleParameters.Add(new ExtParameter(typeParamDescription, parameter));
                         }
@@ -311,7 +315,7 @@
             {
                 IsScheduleView = false;
                 var savedParameterName = UserConfigFile.GetValue(LangItem, nameof(ParameterName));
-                ParameterName = !string.IsNullOrWhiteSpace(savedParameterName) 
+                ParameterName = !string.IsNullOrWhiteSpace(savedParameterName)
                     ? savedParameterName : LabelUtils.GetLabelFor(BuiltInParameter.ALL_MODEL_MARK);
             }
 
@@ -319,9 +323,9 @@
             Suffix = UserConfigFile.GetValue(LangItem, nameof(Suffix));
 
             StartValue = int.TryParse(UserConfigFile.GetValue(LangItem, nameof(StartValue)), out var i) ? i : 1;
-            ScheduleOrderDirection = 
+            OrderDirection =
                 Enum.TryParse(
-                    UserConfigFile.GetValue(LangItem, nameof(ScheduleOrderDirection)), out OrderDirection orderDirection)
+                    UserConfigFile.GetValue(LangItem, nameof(OrderDirection)), out OrderDirection orderDirection)
                     ? orderDirection : OrderDirection.Ascending;
             LocationOrder =
                 Enum.TryParse(UserConfigFile.GetValue(LangItem, nameof(LocationOrder)), out LocationOrder locationOrder)

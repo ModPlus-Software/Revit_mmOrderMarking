@@ -86,12 +86,15 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Converters\EnumToIntConverter.cs" />
-    <Compile Include="ExtParameter.cs" />
+    <Compile Include="ModelElementsSelectionFilter.cs" />
+    <Compile Include="Models\ElementsInRow.cs" />
+    <Compile Include="Models\ExtParameter.cs" />
     <Compile Include="Command.cs" />
     <Compile Include="Enums\LocationOrder.cs" />
     <Compile Include="Enums\OrderDirection.cs" />
     <Compile Include="MainViewModel.cs" />
     <Compile Include="ModPlusConnector.cs" />
+    <Compile Include="Models\NumerateData.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="NumerateService.cs" />
     <Compile Include="WinScheduleAutoNum.xaml.cs">

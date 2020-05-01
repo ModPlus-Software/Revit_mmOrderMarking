@@ -9,50 +9,57 @@
     using Autodesk.Revit.UI.Selection;
     using Enums;
     using JetBrains.Annotations;
+    using Models;
     using ModPlusAPI;
     using ModPlusAPI.Windows;
 
+    /// <summary>
+    /// Сервис нумерации
+    /// </summary>
     public class NumerateService
     {
         private const string LangItem = "mmAutoMarking";
         private readonly UIApplication _uiApplication;
-        private readonly ExternalCommandData _commandData;
-        private readonly string _prefix;
-        private readonly string _suffix;
-        private readonly int _startValue;
-        private readonly OrderDirection _orderDirection;
-        private readonly string _parameterName;
-        private readonly LocationOrder _locationOrder;
-        private readonly bool _numberingInGroups;
+        private readonly Document _doc;
         private readonly List<BuiltInParameter> _allowableBuiltInParameter = new List<BuiltInParameter>
         {
             BuiltInParameter.ALL_MODEL_INSTANCE_COMMENTS,
             BuiltInParameter.SHEET_NAME
         };
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="NumerateService"/> class.
+        /// </summary>
+        /// <param name="uiApplication">Instance of <see cref="UIApplication"/></param>
         public NumerateService(UIApplication uiApplication)
         {
             _uiApplication = uiApplication;
+            _doc = _uiApplication.ActiveUIDocument.Document;
         }
 
-        public void NumerateInSchedule(
-            ExtParameter extParameter,
-            string prefix,
-            string suffix,
-            int startValue,
-            OrderDirection orderDirection)
+        /// <summary>
+        /// Нумерация элементов в спецификации
+        /// </summary>
+        /// <param name="numerateData">Данные для нумерации</param>
+        public void NumerateInSchedule(NumerateData numerateData)
         {
-
+            if (_doc.ActiveView is ViewSchedule viewSchedule)
+            {
+                var newNumbers = CollectElementsInSchedule(numerateData, viewSchedule, out var canByTypeParameter);
+                if (newNumbers.Any())
+                    ProceedNumeration(numerateData, newNumbers, canByTypeParameter);
+            }
         }
 
-        public void NumerateInView(
-            string parameterName, 
-            string prefix,
-            string suffix,
-            int startValue,
-            LocationOrder locationOrder)
+        /// <summary>
+        /// Нумерация элементов в модели
+        /// </summary>
+        /// <param name="numerateData">Данные для нумерации</param>
+        public void NumerateInView(NumerateData numerateData)
         {
-
+            var markNumbers = CollectElementsNotInSchedule(numerateData);
+            if (markNumbers.Any())
+                ProceedNumeration(numerateData, markNumbers, true);
         }
 
         /// <summary>
@@ -61,7 +68,7 @@
         /// <param name="extParameter">Текстовый параметр</param>
         public void ClearInSchedule(ExtParameter extParameter)
         {
-            if (extParameter.IsDouble)
+            if (extParameter.IsNumeric)
                 return;
 
             var doc = _uiApplication.ActiveUIDocument.Document;
@@ -82,7 +89,7 @@
         {
             var uiDoc = _uiApplication.ActiveUIDocument;
             var doc = uiDoc.Document;
-            
+
             var listElements = new List<Element>();
             var elementIds = uiDoc.Selection.GetElementIds();
             if (elementIds.Any())
@@ -110,7 +117,7 @@
         {
             var uiDoc = _uiApplication.ActiveUIDocument;
             var doc = uiDoc.Document;
-            var transactionName = Language.GetFunctionLocalName(LangItem, new ModPlusConnector().LName);
+            var transactionName = Language.GetFunctionLocalName(new ModPlusConnector());
             if (string.IsNullOrEmpty(transactionName))
                 transactionName = LangItem;
             using (var transaction = new Transaction(doc))
@@ -130,76 +137,79 @@
             }
         }
 
-        public void ProceedNumeration()
+        private void ProceedNumeration(
+            NumerateData numerateData, IDictionary<Element, int> elementsWithNewMarkNumber, bool canBeTypeParameter)
         {
-            var uiApp = _commandData.Application;
-            var uiDoc = uiApp.ActiveUIDocument;
+            var uiDoc = _uiApplication.ActiveUIDocument;
             var doc = uiDoc.Document;
 
             try
             {
-                var elNewMarks = new List<ElNewMark>();
-                var elementsInGroups = new List<ElInGroup>();
-
-                uiApp.Application.FailuresProcessing += ApplicationOnFailuresProcessing;
-
-                if (_commandData.View is ViewSchedule viewSchedule)
-                {
-                    CollectElementsInSchedule(viewSchedule, elNewMarks, elementsInGroups);
-                }
-                else
-                {
-                    CollectElementsNotInSchedule(elNewMarks, elementsInGroups);
-                }
+                _uiApplication.Application.FailuresProcessing += ApplicationOnFailuresProcessing;
 
                 var readOnlyParameters = new List<int>();
-                if (elNewMarks.Any())
+                var errors = new Dictionary<string, List<int>>();
+
+                var transactionName = Language.GetFunctionLocalName(new ModPlusConnector());
+                if (string.IsNullOrEmpty(transactionName))
+                    transactionName = LangItem;
+                using (var transaction = new Transaction(doc))
                 {
-                    var transactionName = Language.GetFunctionLocalName(LangItem, new ModPlusConnector().LName);
-                    if (string.IsNullOrEmpty(transactionName))
-                        transactionName = LangItem;
-                    using (var transaction = new Transaction(doc))
+                    transaction.Start(transactionName);
+
+                    var typesToSkip = new List<ElementId>();
+                    foreach (var pair in elementsWithNewMarkNumber)
                     {
-                        transaction.Start(transactionName);
-                        foreach (var e in elNewMarks)
+                        if (typesToSkip.Contains(pair.Key.GetTypeId()))
+                            continue;
+                        try
                         {
-                            if (e.Element.LookupParameter(_parameterName) is Parameter parameter)
+                            if (numerateData.GetParameter(pair.Key, canBeTypeParameter, out var isInstanceParameter) is Parameter parameter)
                             {
+                                if (!isInstanceParameter)
+                                    typesToSkip.Add(pair.Key.GetTypeId());
+
                                 if (parameter.IsReadOnly)
-                                    readOnlyParameters.Add(e.Element.Id.IntegerValue);
+                                    readOnlyParameters.Add(pair.Key.Id.IntegerValue);
                                 else
-                                    parameter.Set(e.Mark);
-                            }
-                            else
-                            {
-                                var t = e.Element.Document.GetElement(e.Element.GetTypeId());
-                                if (t != null && t.LookupParameter(_parameterName) is Parameter p)
-                                {
-                                    if (p.IsReadOnly)
-                                        readOnlyParameters.Add(e.Element.Id.IntegerValue);
-                                    else
-                                        p.Set(e.Mark);
-                                }
+                                    SetParameterValue(pair.Key, parameter, numerateData, pair.Value, isInstanceParameter);
                             }
                         }
-
-                        transaction.Commit();
+                        catch (Autodesk.Revit.Exceptions.OperationCanceledException)
+                        {
+                            // ignore
+                        }
+                        catch (Exception exception)
+                        {
+                            if (errors.ContainsKey(exception.Message))
+                                errors[exception.Message].Add(pair.Key.Id.IntegerValue);
+                            else
+                                errors.Add(exception.Message, new List<int> { pair.Key.Id.IntegerValue });
+                        }
                     }
+
+                    transaction.Commit();
                 }
 
                 if (readOnlyParameters.Any())
                 {
+                    // Параметр "..." имеет свойство "Только для чтения" у следующих элементов
                     ModPlusAPI.IO.String.ShowTextWithNotepad(
-                        $"{Language.GetItem(LangItem, "h14")} \"{_parameterName}\" {Language.GetItem(LangItem, "h15")}:" +
-                        $"\n{string.Join(",", readOnlyParameters.Distinct())}",
+                        $"{Language.GetItem(LangItem, "h14")} \"{numerateData.ParameterName}\" {Language.GetItem(LangItem, "h15")}:" +
+                        $"{Environment.NewLine}{string.Join(",", readOnlyParameters.Distinct())}",
                         LangItem);
                 }
 
-                if (elementsInGroups.Any() && _numberingInGroups)
-                    NumerateInGroups(elementsInGroups, doc);
+                if (errors.Any())
+                {
+                    // При изменении значения параметров перечисленных элементов произошли ошибки
+                    ModPlusAPI.IO.String.ShowTextWithNotepad(
+                        $"{Language.GetItem(LangItem, "h17")}{Environment.NewLine}" +
+                        $"{string.Join(Environment.NewLine, errors.Select(p => $"{p.Key}: {string.Join(",", p.Value)}"))}",
+                        LangItem);
+                }
 
-                uiApp.Application.FailuresProcessing -= ApplicationOnFailuresProcessing;
-
+                _uiApplication.Application.FailuresProcessing -= ApplicationOnFailuresProcessing;
             }
             catch (Exception exception)
             {
@@ -207,30 +217,22 @@
             }
         }
 
-        public void ScheduleAutoDel(
-            ExternalCommandData commandData,
-            string parameterName)
+        private IDictionary<Element, int> CollectElementsInSchedule(
+            NumerateData numerateData, ViewSchedule viewSchedule, out bool canBeTypeParameter)
         {
-            
-        }
-
-        private void CollectElementsInSchedule(
-            ViewSchedule viewSchedule,
-            List<ElNewMark> elNewMarks,
-            List<ElInGroup> elementsInGroups)
-        {
-            var doc = _commandData.Application.ActiveUIDocument.Document;
+            var newNumbers = new Dictionary<Element, int>();
 
             // Если стоит галочка "Для каждого экземпляра", то получаем сортированный список и нумерация
             // происходит далее. Иначе получаем сортированный список по строкам и сразу нумеруем
             if (viewSchedule.Definition.IsItemized)
             {
-                var elements = new FilteredElementCollector(doc, viewSchedule.Id)
-                    .Where(e => e.LookupParameter(_parameterName) != null)
+                canBeTypeParameter = false;
+                var elements = new FilteredElementCollector(_doc, viewSchedule.Id)
+                    .Where(e => numerateData.GetParameter(e, false, out _) != null)
                     .ToList();
 
                 List<Element> sortElements;
-                using (var transaction = new Transaction(doc))
+                using (var transaction = new Transaction(_doc))
                 {
                     transaction.Start("Find in itemized table");
                     sortElements = GetSortedElementsFromItemizedSchedule(viewSchedule, elements);
@@ -240,19 +242,21 @@
                 for (var i = 0; i < sortElements.Count; i++)
                 {
                     var e = sortElements[i];
-
-                    ProceedElement(i, sortElements.Count, e, elNewMarks, elementsInGroups, doc);
+                    var markValue = numerateData.OrderDirection == OrderDirection.Ascending
+                        ? numerateData.StartValue + i
+                        : sortElements.Count + numerateData.StartValue - i;
+                    newNumbers.Add(e, markValue);
                 }
             }
             else
             {
-                var elements = new FilteredElementCollector(doc, viewSchedule.Id)
-                    .Where(e => e.LookupParameter(_parameterName) != null ||
-                                viewSchedule.Document.GetElement(e.GetTypeId())?.LookupParameter(_parameterName) != null)
+                canBeTypeParameter = true;
+                var elements = new FilteredElementCollector(_doc, viewSchedule.Id)
+                    .Where(e => numerateData.GetParameter(e, true, out _) != null)
                     .ToList();
 
-                List<ElInRow> sortedElementsByRows;
-                using (var transaction = new Transaction(doc))
+                List<ElementsInRow> sortedElementsByRows;
+                using (var transaction = new Transaction(_doc))
                 {
                     transaction.Start("Find in rows");
                     sortedElementsByRows = GetSortedElementsFromNotItemizedSchedule(viewSchedule, elements)
@@ -265,46 +269,47 @@
                 {
                     for (var i = 0; i < sortedElementsByRows.Count; i++)
                     {
-                        sortedElementsByRows[i].Elements.ForEach(e =>
+                        foreach (var e in sortedElementsByRows[i].Elements)
                         {
-                            ProceedElement(i, sortedElementsByRows.Count, e, elNewMarks, elementsInGroups, doc);
-                        });
+                            var markValue = numerateData.OrderDirection == OrderDirection.Ascending
+                                ? numerateData.StartValue + i
+                                : sortedElementsByRows.Count + numerateData.StartValue - i;
+                            newNumbers.Add(e, markValue);
+                        }
                     }
                 }
             }
+
+            return newNumbers;
         }
 
-        private void CollectElementsNotInSchedule(
-            List<ElNewMark> elNewMarks,
-            List<ElInGroup> elementsInGroups)
+        private IDictionary<Element, int> CollectElementsNotInSchedule(NumerateData numerateData)
         {
-            var uiApp = _commandData.Application;
-            var uiDoc = uiApp.ActiveUIDocument;
-            var doc = uiDoc.Document;
+            var newNumbers = new Dictionary<Element, int>();
+
+            var uiDoc = _uiApplication.ActiveUIDocument;
             var sortElements = new List<Element>();
             var elementIds = uiDoc.Selection.GetElementIds();
             if (elementIds.Any())
             {
-                var selectedElements = new List<Element>();
-                foreach (var elementId in elementIds)
-                {
-                    selectedElements.Add(doc.GetElement(elementId));
-                }
+                var selectedElements = elementIds
+                    .Select(elementId => _doc.GetElement(elementId))
+                    .Where(ModelElementsSelectionFilter.IsValid);
 
-                sortElements = _locationOrder == LocationOrder.Creation
+                sortElements = numerateData.LocationOrder == LocationOrder.Creation
                     ? selectedElements.ToList()
-                    : GetSortedElementsFromSelection(selectedElements);
+                    : GetSortedElementsFromSelection(selectedElements, numerateData);
             }
             else
             {
                 try
                 {
-                    var pickedElements =
-                        uiDoc.Selection.PickObjects(ObjectType.Element, Language.GetItem(LangItem, "m1"))
-                            .Select(r => doc.GetElement(r));
-                    sortElements = _locationOrder == LocationOrder.Creation
+                    var pickedElements = uiDoc.Selection
+                        .PickObjects(ObjectType.Element, new ModelElementsSelectionFilter(), Language.GetItem(LangItem, "m1"))
+                        .Select(r => _doc.GetElement(r));
+                    sortElements = numerateData.LocationOrder == LocationOrder.Creation
                         ? pickedElements.ToList()
-                        : GetSortedElementsFromSelection(pickedElements);
+                        : GetSortedElementsFromSelection(pickedElements, numerateData);
                 }
                 catch (Autodesk.Revit.Exceptions.OperationCanceledException)
                 {
@@ -315,62 +320,56 @@
             for (var i = 0; i < sortElements.Count; i++)
             {
                 var e = sortElements[i];
-
-                ProceedElement(i, sortElements.Count, e, elNewMarks, elementsInGroups, doc);
+                var markValue = numerateData.OrderDirection == OrderDirection.Ascending
+                    ? numerateData.StartValue + i
+                    : sortElements.Count + numerateData.StartValue - i;
+                newNumbers.Add(e, markValue);
             }
+
+            return newNumbers;
         }
 
-        private void ProceedElement(
-            int i,
-            int elementsCount,
-            Element e,
-            ICollection<ElNewMark> elNewMarks,
-            ICollection<ElInGroup> elementsInGroups,
-            Document doc)
+        private static void SetParameterValue(
+            Element element, Parameter parameter, NumerateData numerateData, int markNumber, bool isInstanceParameter)
         {
-            var markValue = _orderDirection == OrderDirection.Ascending
-                ? _startValue + i
-                : elementsCount + _startValue - i;
-            var newMark = _prefix + markValue + _suffix;
-
-            if (e.GroupId != ElementId.InvalidElementId)
+            if (element.GroupId != ElementId.InvalidElementId &&
+                parameter.Definition is InternalDefinition internalDefinition &&
+                isInstanceParameter)
             {
-                var parameter = e.LookupParameter(_parameterName);
-                if (parameter != null)
+                // Параметр в группе меняем без разгруппировки, если:
+                // 1 - это стандартный параметр "Марка"
+                // 2 - это общий параметр проекта с включенным свойством "Значения могут меняться по экземплярам групп"
+                if (!internalDefinition.VariesAcrossGroups &&
+                    internalDefinition.BuiltInParameter != BuiltInParameter.ALL_MODEL_MARK)
                 {
-                    var map = doc.ParameterBindings;
-                    var binding = map.get_Item(parameter.Definition);
-                    var internalDefinition = (InternalDefinition)parameter.Definition;
+                    // Невозможно изменить параметр экземпляра у элемента, расположенного в группе, если у параметра не
+                    // включено свойство "Значения могут меняться по экземплярам групп" или это не системный параметр "Марка"
+                    throw new ArgumentException(Language.GetItem(LangItem, "h16"));
+                }
+            }
 
-                    // Параметр меняем без разгруппировки, если:
-                    // 1 - это стандартный параметр "Марка"
-                    // 2 - это общий параметр проекта с включенным свойством "Значения могут меняться по экземплярам групп"
-                    if ((binding != null && internalDefinition.VariesAcrossGroups) ||
-                        internalDefinition.BuiltInParameter == BuiltInParameter.ALL_MODEL_MARK)
-                    {
-                        elNewMarks.Add(new ElNewMark(e, newMark));
-                    }
-                    else
-                    {
-                        var elInGroup = elementsInGroups.FirstOrDefault(g => g.GroupId == e.GroupId.IntegerValue);
-                        if (elInGroup == null)
-                        {
-                            var group = doc.GetElement(e.GroupId) as Group;
-                            elInGroup = new ElInGroup(group);
-                            elementsInGroups.Add(elInGroup);
-                        }
-
-                        elInGroup.Elements.Add(e, newMark);
-                    }
+            if (numerateData.IsNumeric)
+            {
+                if (parameter.StorageType == StorageType.Integer)
+                {
+                    parameter.Set(markNumber);
+                }
+                else if (parameter.StorageType == StorageType.Double)
+                {
+#if R2015 || R2016 || R2017 || R2018 || R2019 || R2020
+                    parameter.Set(UnitUtils.ConvertToInternalUnits(markNumber, parameter.DisplayUnitType));
+#else
+                    parameter.Set(UnitUtils.ConvertToInternalUnits(markNumber, parameter.GetUnitTypeId()));
+#endif
                 }
             }
             else
             {
-                elNewMarks.Add(new ElNewMark(e, newMark));
+                parameter.Set($"{numerateData.Prefix}{markNumber}{numerateData.Suffix}");
             }
         }
 
-        private void ApplicationOnFailuresProcessing(object sender, FailuresProcessingEventArgs e)
+        private static void ApplicationOnFailuresProcessing(object sender, FailuresProcessingEventArgs e)
         {
             var failList = e.GetFailuresAccessor().GetFailureMessages();
             if (failList.Any())
@@ -399,103 +398,11 @@
             }
         }
 
-        private void ApplicationOnFailuresProcessing_SkipAll(object sender, FailuresProcessingEventArgs e)
-        {
-            var failList = e.GetFailuresAccessor().GetFailureMessages();
-            if (failList.Any())
-            {
-                e.GetFailuresAccessor().DeleteAllWarnings();
-                e.SetProcessingResult(FailureProcessingResult.Continue);
-            }
-        }
-
-        private void NumerateInGroups(List<ElInGroup> elementsInGroups, Document doc)
-        {
-            var transactionName = Language.GetFunctionLocalName(LangItem, new ModPlusConnector().LName);
-            if (string.IsNullOrEmpty(transactionName))
-                transactionName = LangItem;
-            using (var transactionGroup = new TransactionGroup(doc))
-            {
-                transactionGroup.Start($"{transactionName}: Groups");
-
-                foreach (var grouping in elementsInGroups.GroupBy(e => e.GroupName))
-                {
-                    var elements = new List<List<ElementId>>();
-
-                    // ungroup and delete
-                    using (var transaction = new Transaction(doc))
-                    {
-                        transaction.Start("Ungroup");
-
-                        foreach (var elInGroup in grouping)
-                        {
-                            var group = (Group) doc.GetElement(new ElementId(elInGroup.GroupId));
-                            var grpElements = group.UngroupMembers().ToList();
-                            elements.Add(grpElements);
-                        }
-
-                        transaction.Commit();
-
-                        transaction.Start("Numerate");
-
-                        foreach (var elInGroup in grouping)
-                        {
-                            foreach (var pair in elInGroup.Elements)
-                            {
-                                if (pair.Key.LookupParameter(_parameterName) is Parameter parameter)
-                                {
-                                    parameter.Set(pair.Value);
-                                }
-                            }
-                        }
-
-                        transaction.Commit();
-
-                        transaction.Start("Create new group");
-                        var idsToDelete = new List<ElementId>();
-                        GroupType createdGroup = null;
-                        foreach (var elementIds in elements)
-                        {
-                            var newGroup = doc.Create.NewGroup(elementIds);
-                            if (createdGroup == null)
-                            {
-                                createdGroup = new FilteredElementCollector(doc)
-                                    .OfClass(typeof(GroupType))
-                                    .Cast<GroupType>()
-                                    .FirstOrDefault(g => g.Name == grouping.Key);
-                                if (createdGroup != null)
-                                {
-                                    idsToDelete.Add(newGroup.GroupType.Id);
-                                    newGroup.GroupType = createdGroup;
-                                }
-                                else
-                                {
-                                    newGroup.GroupType.Name = grouping.Key;
-                                }
-                            }
-                            else
-                            {
-                                idsToDelete.Add(newGroup.GroupType.Id);
-                                newGroup.GroupType = createdGroup;
-                            }
-                        }
-
-                        doc.Delete(idsToDelete);
-
-                        transaction.Commit();
-                    }
-                }
-
-                transactionGroup.Assimilate();
-            }
-        }
-
         /// <summary>
         /// Получение сортированных элементов из спецификации с установленной галочкой "Для каждого экземпляра"
         /// </summary>
         /// <param name="viewSchedule">Вид спецификации</param>
         /// <param name="elements">Элементы, полученные с этого вида</param>
-        /// <returns></returns>
         private List<Element> GetSortedElementsFromItemizedSchedule(ViewSchedule viewSchedule, List<Element> elements)
         {
             var sortedElements = new List<Element>();
@@ -509,7 +416,7 @@
                 transaction.Start();
 
                 // Разделитель
-                var separator = "$ElementId=";
+                const string separator = "$ElementId=";
 
                 // Записываем Id всех элементов в параметр "Комментарий"
                 elements.ForEach(e =>
@@ -564,10 +471,9 @@
         /// </summary>
         /// <param name="viewSchedule">Вид спецификации</param>
         /// <param name="elements">Элементы, полученные с этого вида</param>
-        /// <returns></returns>
-        private IEnumerable<ElInRow> GetSortedElementsFromNotItemizedSchedule(ViewSchedule viewSchedule, List<Element> elements)
+        private IEnumerable<ElementsInRow> GetSortedElementsFromNotItemizedSchedule(ViewSchedule viewSchedule, List<Element> elements)
         {
-            var sortedElements = new List<ElInRow>();
+            var sortedElements = new List<ElementsInRow>();
 
             var builtInParameter = GetBuiltInParameterForElements(elements);
             if (builtInParameter == null)
@@ -581,7 +487,7 @@
                 cachedParameterValues.Add(e, parameter.AsString());
             });
 
-            var signalValue = "$Filled$";
+            const string signalValue = "$Filled$";
             var columnNumber = -1;
             var startRowNumber = -1;
 
@@ -616,7 +522,7 @@
                         if (cellValue.Contains(signalValue))
                         {
                             rowNumber++;
-                            sortedElements.Add(new ElInRow(rowNumber));
+                            sortedElements.Add(new ElementsInRow(rowNumber));
 
                             if (startRowNumber == -1)
                                 startRowNumber = r;
@@ -660,7 +566,6 @@
                     transaction.Commit();
                 }
 
-
                 // теперь смотрю какая ячейка погасла
                 var sectionData = viewSchedule.GetTableData().GetSectionData(SectionType.Body);
                 var rowNumber = 0;
@@ -700,7 +605,7 @@
         }
 
         [CanBeNull]
-        private BuiltInParameter? GetBuiltInParameterForElements(List<Element> elements)
+        private BuiltInParameter? GetBuiltInParameterForElements(IReadOnlyCollection<Element> elements)
         {
             BuiltInParameter? returnedBuiltInParameter = null;
 
@@ -723,7 +628,7 @@
 
             return returnedBuiltInParameter;
         }
-        
+
         private static void AddFieldToSchedule(ViewSchedule viewSchedule, BuiltInParameter builtInParameter, out bool fieldAlreadyAdded)
         {
             var schedulableFields = viewSchedule.Definition.GetSchedulableFields();
@@ -802,7 +707,8 @@
             viewSchedule.Document.Regenerate();
         }
 
-        private List<Element> GetSortedElementsFromSelection(IEnumerable<Element> elements)
+        private static List<Element> GetSortedElementsFromSelection(
+            IEnumerable<Element> elements, NumerateData numerateData)
         {
             var sortedElements = new List<Element>();
 
@@ -818,9 +724,7 @@
                 }
                 else if (location is LocationCurve locationCurve)
                 {
-                    points.Add(
-                        element,
-                        (locationCurve.Curve.GetEndPoint(0) + locationCurve.Curve.GetEndPoint(1)) / 2);
+                    points.Add(element, locationCurve.Curve.Evaluate(0.5, true));
                 }
             }
 
@@ -862,74 +766,26 @@
             if (rows.Any())
             {
                 rows.Sort((r1, r2) => r1.Values.First().Y.CompareTo(r2.Values.First().Y));
-                if (_locationOrder == LocationOrder.LeftToRightUpToDown ||
-                    _locationOrder == LocationOrder.RightToLeftUpToDown)
+
+                if (numerateData.LocationOrder == LocationOrder.LeftToRightUpToDown ||
+                    numerateData.LocationOrder == LocationOrder.RightToLeftUpToDown)
                     rows.Reverse();
                 foreach (var row in rows)
                 {
-                    if (_locationOrder == LocationOrder.LeftToRightDownToUp ||
-                        _locationOrder == LocationOrder.LeftToRightUpToDown)
+                    if (numerateData.LocationOrder == LocationOrder.LeftToRightDownToUp ||
+                        numerateData.LocationOrder == LocationOrder.LeftToRightUpToDown)
                     {
-                        foreach (var keyValuePair in row.OrderBy(r => r.Value.X))
-                        {
-                            sortedElements.Add(keyValuePair.Key);
-                        }
+                        sortedElements.AddRange(row.OrderBy(r => r.Value.X).Select(keyValuePair => keyValuePair.Key));
                     }
-                    else if (_locationOrder == LocationOrder.RightToLeftDownToUp ||
-                             _locationOrder == LocationOrder.RightToLeftUpToDown)
+                    else if (numerateData.LocationOrder == LocationOrder.RightToLeftDownToUp ||
+                             numerateData.LocationOrder == LocationOrder.RightToLeftUpToDown)
                     {
-                        foreach (var keyValuePair in row.OrderByDescending(r => r.Value.X))
-                        {
-                            sortedElements.Add(keyValuePair.Key);
-                        }
+                        sortedElements.AddRange(row.OrderByDescending(r => r.Value.X).Select(keyValuePair => keyValuePair.Key));
                     }
                 }
             }
 
             return sortedElements;
-        }
-
-        /// <summary>
-        /// Объект, содержащий информацию о том, какие элементе в какой строке находятся
-        /// </summary>
-        internal class ElInRow
-        {
-            public ElInRow(int rowNumber)
-            {
-                RowNumber = rowNumber;
-            }
-
-            public int RowNumber { get; }
-
-            public List<Element> Elements { get; } = new List<Element>();
-        }
-
-        internal class ElInGroup
-        {
-            public ElInGroup(Group group)
-            {
-                GroupId = group.Id.IntegerValue;
-                GroupName = group.Name;
-            }
-
-            public int GroupId { get; }
-
-            public string GroupName { get; set; }
-
-            public Dictionary<Element, string> Elements { get; } = new Dictionary<Element, string>();
-        }
-
-        internal class ElNewMark
-        {
-            public ElNewMark(Element element, string mark)
-            {
-                Element = element;
-                Mark = mark;
-            }
-
-            public Element Element { get; }
-
-            public string Mark { get; }
         }
     }
 }
