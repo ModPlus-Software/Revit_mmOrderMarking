@@ -244,7 +244,7 @@
                     var e = sortElements[i];
                     var markValue = numerateData.OrderDirection == OrderDirection.Ascending
                         ? numerateData.StartValue + i
-                        : sortElements.Count + numerateData.StartValue - i;
+                        : sortElements.Count + numerateData.StartValue - i - 2;
                     newNumbers.Add(e, markValue);
                 }
             }
@@ -273,7 +273,7 @@
                         {
                             var markValue = numerateData.OrderDirection == OrderDirection.Ascending
                                 ? numerateData.StartValue + i
-                                : sortedElementsByRows.Count + numerateData.StartValue - i;
+                                : sortedElementsByRows.Count + numerateData.StartValue - i - 1;
                             newNumbers.Add(e, markValue);
                         }
                     }
@@ -322,7 +322,7 @@
                 var e = sortElements[i];
                 var markValue = numerateData.OrderDirection == OrderDirection.Ascending
                     ? numerateData.StartValue + i
-                    : sortElements.Count + numerateData.StartValue - i;
+                    : sortElements.Count + numerateData.StartValue - i - 1;
                 newNumbers.Add(e, markValue);
             }
 
