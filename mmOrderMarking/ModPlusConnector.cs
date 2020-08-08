@@ -33,9 +33,9 @@ namespace mmOrderMarking
 
         public Guid AddInId => Guid.Empty;
 
-        public string LName => "Маркировка по порядку";
+        public string LName => "Нумерация";
 
-        public string Description => "Добавление нумерации в марку элементов с возможностью маркировки в спецификации";
+        public string Description => "Добавление нумерации в указанный параметр элементов с возможностью нумерации в спецификации";
 
         public string Author => "Пекшев Александр aka Modis";
 
@@ -43,7 +43,7 @@ namespace mmOrderMarking
 
         public bool CanAddToRibbon => true;
 
-        public string FullDescription => string.Empty;
+        public string FullDescription => "При работе на виде, не являющимся спецификацией, можно указывать направление нумерации в зависимости от расположения элементов или добавлять нумерацию в порядке создания элементов. При работе в спецификации плагин добавляет нумерацию в порядке расположения элементов в спецификации (с учетом сортировки). Свойство спецификации «Для каждого экземпляра» влияет на скорость работы плагина. Имеется возможность задавать префикс и суффикс для номера";
 
         public string ToolTipHelpImage => string.Empty;
 
