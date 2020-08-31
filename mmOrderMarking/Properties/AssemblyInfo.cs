@@ -9,14 +9,10 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 [assembly: ComVisible(false)]
-[assembly: AssemblyVersion("2.7.1.0")]
-[assembly: AssemblyFileVersion("2.7.1.0")]
+[assembly: AssemblyVersion("2.7.2.0")]
+[assembly: AssemblyFileVersion("2.7.2.0")]
 
-#if R2015
-[assembly: AssemblyDescription("2015")]
-#elif R2016
-[assembly: AssemblyDescription("2016")]
-#elif R2017
+#if R2017
 [assembly: AssemblyDescription("2017")]
 #elif R2018
 [assembly: AssemblyDescription("2018")]

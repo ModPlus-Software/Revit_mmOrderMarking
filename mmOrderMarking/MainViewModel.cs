@@ -259,8 +259,6 @@
 
             if (doc.ActiveView is ViewSchedule viewSchedule)
             {
-                IsScheduleView = true;
-
                 var elements = new FilteredElementCollector(doc, doc.ActiveView.Id)
                     .WhereElementIsNotElementType().ToList();
                 var element = elements.FirstOrDefault();
@@ -313,7 +311,6 @@
             }
             else
             {
-                IsScheduleView = false;
                 var savedParameterName = UserConfigFile.GetValue(LangItem, nameof(ParameterName));
                 ParameterName = !string.IsNullOrWhiteSpace(savedParameterName)
                     ? savedParameterName : LabelUtils.GetLabelFor(BuiltInParameter.ALL_MODEL_MARK);

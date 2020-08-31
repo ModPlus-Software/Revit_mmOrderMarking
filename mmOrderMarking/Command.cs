@@ -31,6 +31,7 @@
             var window = new WinScheduleAutoNum();
             var context = new MainViewModel(window, commandData.Application);
             window.DataContext = context;
+            context.IsScheduleView = commandData.Application.ActiveUIDocument.Document.ActiveView is ViewSchedule;
             window.ContentRendered += (sender, args) => context.Init();
             window.ShowDialog();
 

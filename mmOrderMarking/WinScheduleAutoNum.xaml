@@ -144,6 +144,7 @@
             <Button Grid.Column="1"
                     Content="{Binding Source={StaticResource Lang}, XPath=h5}" HorizontalAlignment="Right"
                     IsEnabled="{Binding Path=IsEnabledPrefixAndSuffix}"
+                    Visibility="{Binding Path=IsScheduleView, Converter={StaticResource FalseToVisibleConverter}}"
                     Command="{Binding Path=ClearCommand}"/>
         </Grid>
     </Grid>
