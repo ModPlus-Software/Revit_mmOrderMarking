@@ -234,9 +234,20 @@
                 _parentWindow.Hide();
 
                 if (IsScheduleView)
-                    _numerateService.ClearInSchedule(ScheduleParameter);
+                {
+                    /*
+                     * Внимание! Очистка параметра производится у всех элементов данной спецификации, независимо от
+                     * настроек фильтрации. Это значит, что если, например, в спецификации представлено 10 колонн, а
+                     * при настройках фильтрации отображается только 5 колонн, то очистка параметра произойдет у всех
+                     * 10 колонн! Выполнить очистку параметра?
+                     */
+                    if (MessageBox.ShowYesNo(Language.GetItem(LangItem, "h18")))
+                        _numerateService.ClearInSchedule(ScheduleParameter);
+                }
                 else
+                {
                     _numerateService.ClearInView(ParameterName);
+                }
             }
             catch (Exception exception)
             {
