@@ -15,7 +15,9 @@
         /// <inheritdoc />
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
+#if !DEBUG
             Statistic.SendCommandStarting(new ModPlusConnector());
+#endif
 
             if (commandData.View is ViewSchedule)
             {

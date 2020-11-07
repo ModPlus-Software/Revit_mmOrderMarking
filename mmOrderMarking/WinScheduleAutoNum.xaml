@@ -6,7 +6,6 @@
     xmlns:mps="https://modplus.org/winfx/xaml/controls"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
     xmlns:mmOrderMarking="clr-namespace:mmOrderMarking" 
-    xmlns:converters="clr-namespace:mmOrderMarking.Converters" 
     xmlns:apiConverters="clr-namespace:ModPlusAPI.Converters;assembly=ModPlusAPI"
     xmlns:enums="clr-namespace:mmOrderMarking.Enums"
     xmlns:models="clr-namespace:mmOrderMarking.Models"
@@ -20,7 +19,7 @@
                 <ResourceDictionary Source="pack://application:,,,/ModPlusStyle;component/Styles/Controls.xaml"></ResourceDictionary>
             </ResourceDictionary.MergedDictionaries>
             <XmlDataProvider x:Key="Lang" Source="E:/ModPlus/Languages/en-US.xml" XPath="ModPlus/mmOrderMarking"></XmlDataProvider>
-            <converters:EnumToIntConverter x:Key="EnumToIntConverter"/>
+            <apiConverters:EnumToIntConverter x:Key="EnumToIntConverter"/>
             <apiConverters:BooleanToVisibilityConverter 
                 x:Key="TrueToVisibleConverter" TrueVisibility="Visible" FalseVisibility="Collapsed"/>
             <apiConverters:BooleanToVisibilityConverter 
