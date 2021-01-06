@@ -7,40 +7,34 @@
     /// <summary>
     /// Данные для нумерации
     /// </summary>
-    public class NumerateData
+    public abstract class NumerateData
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="NumerateData"/> class.
         /// </summary>
-        /// <param name="parameterName">Имя параметра</param>
+        /// <param name="parameter">Параметр для нумерации</param>
         /// <param name="startValue">Начальное числовое значение</param>
         /// <param name="prefix">Префикс</param>
         /// <param name="suffix">Суффикс</param>
         /// <param name="orderDirection">Направление нумерации (по возрастанию или убыванию)</param>
-        /// <param name="locationOrder">Направление нумерации по положению элементов</param>
-        /// <param name="isNumeric">Является ли параметр числовым</param>
-        public NumerateData(
-            string parameterName,
+        protected NumerateData(
+            ExtParameter parameter,
             int startValue,
             string prefix,
             string suffix,
-            OrderDirection orderDirection,
-            LocationOrder locationOrder,
-            bool isNumeric)
+            OrderDirection orderDirection)
         {
-            ParameterName = parameterName;
+            Parameter = parameter;
             StartValue = startValue;
             Prefix = prefix;
             Suffix = suffix;
             OrderDirection = orderDirection;
-            LocationOrder = locationOrder;
-            IsNumeric = isNumeric;
         }
 
         /// <summary>
         /// Имя параметра
         /// </summary>
-        public string ParameterName { get; }
+        public ExtParameter Parameter { get; }
 
         /// <summary>
         /// Начальное числовое значение
@@ -56,22 +50,12 @@
         /// Суффикс
         /// </summary>
         public string Suffix { get; }
-
-        /// <summary>
-        /// Является ли параметр числовым
-        /// </summary>
-        public bool IsNumeric { get; }
-
+        
         /// <summary>
         /// Направление нумерации (по возрастанию или убыванию)
         /// </summary>
         public OrderDirection OrderDirection { get; }
-
-        /// <summary>
-        /// Направление нумерации по положению элементов
-        /// </summary>
-        public LocationOrder LocationOrder { get; }
-
+        
         /// <summary>
         /// Взять параметр из элемента
         /// </summary>
@@ -81,14 +65,13 @@
         [CanBeNull]
         public Parameter GetParameter(Element element, bool getFromType, out bool isInstanceParameter)
         {
-            var parameter = element.LookupParameter(ParameterName);
+            var parameter = element.LookupParameter(Parameter.Name);
             isInstanceParameter = true;
             
             if (parameter == null && getFromType)
             {
                 var elementType = element.Document.GetElement(element.GetTypeId());
-                if (elementType != null &&
-                    elementType.LookupParameter(ParameterName) is Parameter p)
+                if (elementType?.LookupParameter(Parameter.Name) is Parameter p)
                 {
                     isInstanceParameter = false;
                     parameter = p;

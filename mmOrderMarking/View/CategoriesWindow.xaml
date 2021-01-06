@@ -1,0 +1,99 @@
+﻿<mps:ModPlusWindow x:Class="mmOrderMarking.View.CategoriesWindow"
+                   xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                   xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                   xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                   xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                   xmlns:models="clr-namespace:mmOrderMarking.Models"
+                   xmlns:mps="https://modplus.org/winfx/xaml/controls"
+                   xmlns:converters="clr-namespace:ModPlusAPI.Converters;assembly=ModPlusAPI"
+                   xmlns:context="clr-namespace:mmOrderMarking.Context"
+                   mc:Ignorable="d"
+                   Height="600" Width="500"
+                   Topmost="True"
+                   d:DataContext="{d:DesignInstance context:CategoriesContext, IsDesignTimeCreatable=False}">
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="pack://application:,,,/ModPlusStyle;component/Styles/Controls.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+            <XmlDataProvider x:Key="Lang" Source="E:/ModPlus/Languages/en-US.xml" XPath="ModPlus/mmOrderMarking"/>
+            <converters:BooleanToVisibilityConverter 
+                x:Key="TrueToVisibleConverter" TrueVisibility="Visible" FalseVisibility="Collapsed"/>
+        </ResourceDictionary>
+    </Window.Resources>
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
+        </Grid.ColumnDefinitions>
+        <TextBox Grid.Row="0" Grid.Column="0"
+                 mps:HintAssist.Hint="{Binding Source={StaticResource Lang}, XPath=h10}"
+                 mps:HintAssist.IsFloating="True"
+                 mps:TextFieldAssist.ClearTextButton="True"
+                 Text="{Binding Path=SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"></TextBox>
+        <ListBox Grid.Row="1" Grid.Column="0"
+                 ItemsSource="{Binding Path=Categories}"
+                 MinHeight="250"
+                 ScrollViewer.HorizontalScrollBarVisibility="Auto">
+            <ListBox.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <StackPanel />
+                </ItemsPanelTemplate>
+            </ListBox.ItemsPanel>
+            <ListBox.ItemContainerStyle>
+                <Style TargetType="ListBoxItem" BasedOn="{StaticResource ModPlusListBoxItem}">
+                    <Setter Property="Visibility" Value="{Binding Path=IsVisible, Converter={StaticResource TrueToVisibleConverter}}"/>
+                </Style>
+            </ListBox.ItemContainerStyle>
+            <ListBox.ItemTemplate>
+                <DataTemplate DataType="models:RevitBuiltInCategory">
+                    <CheckBox IsChecked="{Binding Path=IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
+                        <CheckBox.Content>
+                            <StackPanel Orientation="Vertical">
+                                <TextBlock Text="{Binding Path=DisplayName, Mode=OneWay}"></TextBlock>
+                                <TextBlock FontSize="10" Opacity=".8"
+                                           Text="{Binding Path=BuiltInCategory, Mode=OneWay}"></TextBlock>
+                            </StackPanel>
+                        </CheckBox.Content>
+                    </CheckBox>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+
+        <!-- uncheck all -->
+        <Button Grid.Row="1" Grid.Column="1"
+                VerticalAlignment="Top"
+                MinWidth="0" Padding="2" Style="{DynamicResource ModPlusFlatButton}"
+                ToolTip="{Binding Source={StaticResource Lang}, XPath=t13}"
+                ToolTipService.InitialShowDelay="100"
+                Command="{Binding Path=UncheckAllCommand}">
+            <Viewbox Width="24" Height="24">
+                <Canvas Width="24" Height="24">
+                    <Path Data="M14,2A8,8 0 0,0 6,10A8,8 0 0,0 14,18A8,8 0 0,0 22,10A8,8 0 0,0 14,2M14,4C17.32,4 20,6.69 20,10C20,13.32 17.32,16 14,16A6,6 0 0,1 8,10A6,6 0 0,1 14,4M4.93,5.82C3.08,7.34 2,9.61 2,12A8,8 0 0,0 10,20C10.64,20 11.27,19.92 11.88,19.77C10.12,19.38 8.5,18.5 7.17,17.29C5.22,16.25 4,14.21 4,12C4,11.7 4.03,11.41 4.07,11.11C4.03,10.74 4,10.37 4,10C4,8.56 4.32,7.13 4.93,5.82Z"
+                          Fill="{Binding RelativeSource={RelativeSource FindAncestor, AncestorType=Button}, Path=Foreground}" />
+                </Canvas>
+            </Viewbox>
+        </Button>
+
+        <!-- selected count -->
+        <TextBlock Grid.Row="2" Grid.Column="0"
+                   Margin="{DynamicResource ModPlusDefaultMargin}">
+            <Run Text="{Binding Source={StaticResource Lang}, XPath=h11}"></Run>
+            <Run Text="{Binding Path=SelectedCategoriesCount, Mode=OneWay}"></Run>
+        </TextBlock>
+
+        <!-- buttons -->
+        <Button Grid.Row="3"
+                Grid.Column="0"
+                Grid.ColumnSpan="2"
+                x:Name="BtAccept"
+                Content="{Binding Source={StaticResource Lang}, XPath=accept}"
+                Click="BtAccept_OnClick"/>
+    </Grid>
+</mps:ModPlusWindow>

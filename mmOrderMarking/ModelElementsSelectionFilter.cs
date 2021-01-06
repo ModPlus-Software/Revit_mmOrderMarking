@@ -1,23 +1,21 @@
 ﻿namespace mmOrderMarking
 {
+    using System.Collections.Generic;
+    using System.Linq;
     using Autodesk.Revit.DB;
     using Autodesk.Revit.UI.Selection;
+    using Models;
 
     /// <summary>
     /// Фильтр выбора элементов в модели
     /// </summary>
     public class ModelElementsSelectionFilter : ISelectionFilter
     {
-        /// <summary>
-        /// Является ли элемент валидным для обработки
-        /// </summary>
-        /// <param name="e">Элемент Revit</param>
-        public static bool IsValid(Element e)
+        private readonly IEnumerable<RevitBuiltInCategory> _categories;
+
+        public ModelElementsSelectionFilter(IEnumerable<RevitBuiltInCategory> categories)
         {
-            if (e is Group)
-                return false;
-            
-            return true;
+            _categories = categories;
         }
 
         /// <inheritdoc/>
@@ -30,6 +28,19 @@
         public bool AllowReference(Reference reference, XYZ position)
         {
             throw new System.NotImplementedException();
+        }
+
+        private bool IsValid(Element e)
+        {
+            if (e is Group)
+                return false;
+
+            if (_categories.Any() && e.Category != null)
+            {
+                return _categories.FirstOrDefault(c => (int)c.BuiltInCategory == e.Category.Id.IntegerValue) != null;
+            }
+            
+            return true;
         }
     }
 }

@@ -1,4 +1,4 @@
-﻿namespace mmOrderMarking
+﻿namespace mmOrderMarking.Services
 {
     using System;
     using System.Collections.Generic;
@@ -6,11 +6,12 @@
     using Autodesk.Revit.DB;
     using Autodesk.Revit.DB.Events;
     using Autodesk.Revit.UI;
-    using Autodesk.Revit.UI.Selection;
     using Enums;
     using JetBrains.Annotations;
     using Models;
     using ModPlusAPI;
+    using ModPlusAPI.Enums;
+    using ModPlusAPI.Services;
     using ModPlusAPI.Windows;
 
     /// <summary>
@@ -18,7 +19,7 @@
     /// </summary>
     public class NumerateService
     {
-        private const string LangItem = "mmAutoMarking";
+        private const string LangItem = "mmOrderMarking";
         private readonly UIApplication _uiApplication;
         private readonly Document _doc;
         private readonly List<BuiltInParameter> _allowableBuiltInParameter = new List<BuiltInParameter>
@@ -41,7 +42,7 @@
         /// Нумерация элементов в спецификации
         /// </summary>
         /// <param name="numerateData">Данные для нумерации</param>
-        public void NumerateInSchedule(NumerateData numerateData)
+        public void NumerateInSchedule(InScheduleNumerateData numerateData)
         {
             if (_doc.ActiveView is ViewSchedule viewSchedule)
             {
@@ -54,12 +55,41 @@
         /// <summary>
         /// Нумерация элементов в модели
         /// </summary>
+        /// <param name="selectionType">Тип выбора элементов, влияющий на порядок нумерации</param>
         /// <param name="numerateData">Данные для нумерации</param>
-        public void NumerateInView(NumerateData numerateData)
+        /// <param name="elements">Элементы для нумерации</param>
+        public void NumerateInView(
+            ElementsSelectionType selectionType, InViewNumerateData numerateData, List<Element> elements)
         {
-            var markNumbers = CollectElementsNotInSchedule(numerateData);
-            if (markNumbers.Any())
-                ProceedNumeration(numerateData, markNumbers, true);
+            var newNumbers = new Dictionary<Element, int>();
+            List<Element> sortElements;
+            OrderDirection orderDirection;
+            
+            if (selectionType == ElementsSelectionType.ByRectangle)
+            {
+                
+                orderDirection = OrderDirection.Ascending;
+                sortElements = numerateData.LocationOrder == LocationOrder.Creation
+                    ? elements
+                    : GetElementsSortedByLocation(elements, numerateData);
+            }
+            else
+            {
+                orderDirection = numerateData.OrderDirection;
+                sortElements = elements;
+            }
+            
+            for (var i = 0; i < sortElements.Count; i++)
+            {
+                var e = sortElements[i];
+                var markValue = orderDirection == OrderDirection.Ascending
+                    ? numerateData.StartValue + i
+                    : sortElements.Count + numerateData.StartValue - i - 1;
+                newNumbers.Add(e, markValue);
+            }
+
+            if (newNumbers.Any())
+                ProceedNumeration(numerateData, newNumbers, true);
         }
 
         /// <summary>
@@ -84,33 +114,11 @@
         /// <summary>
         /// Удаление значения текстового параметра у элементов на виде, не являющимся спецификацией
         /// </summary>
-        /// <param name="parameterName">Имя текстового параметра</param>
-        public void ClearInView(string parameterName)
+        /// <param name="extParameter">Имя текстового параметра</param>
+        /// <param name="elements">Элементы</param>
+        public void ClearInView(ExtParameter extParameter, List<Element> elements)
         {
-            var uiDoc = _uiApplication.ActiveUIDocument;
-            var doc = uiDoc.Document;
-
-            var listElements = new List<Element>();
-            var elementIds = uiDoc.Selection.GetElementIds();
-            if (elementIds.Any())
-            {
-                listElements.AddRange(elementIds.Select(elementId => doc.GetElement(elementId)));
-            }
-            else
-            {
-                try
-                {
-                    var selectedElements =
-                        uiDoc.Selection.PickElementsByRectangle(Language.GetItem(LangItem, "m1"));
-                    listElements = selectedElements.ToList();
-                }
-                catch (Autodesk.Revit.Exceptions.OperationCanceledException)
-                {
-                    // ignore
-                }
-            }
-
-            ClearStringParameter(listElements, parameterName);
+            ClearStringParameter(elements, extParameter.Name);
         }
 
         private void ClearStringParameter(IEnumerable<Element> listElements, string parameterName)
@@ -147,8 +155,7 @@
             {
                 _uiApplication.Application.FailuresProcessing += ApplicationOnFailuresProcessing;
 
-                var readOnlyParameters = new List<int>();
-                var errors = new Dictionary<string, List<int>>();
+                var resultService = new ResultService();
 
                 var transactionName = Language.GetFunctionLocalName(new ModPlusConnector());
                 if (string.IsNullOrEmpty(transactionName))
@@ -170,9 +177,17 @@
                                     typesToSkip.Add(pair.Key.GetTypeId());
 
                                 if (parameter.IsReadOnly)
-                                    readOnlyParameters.Add(pair.Key.Id.IntegerValue);
+                                {
+                                    // Параметр "..." имеет свойство "Только для чтения" у следующих элементов
+                                    resultService.Add(
+                                        $"{Language.GetItem("h14")} \"{numerateData.Parameter.Name}\" {Language.GetItem("h15")}:",
+                                        pair.Key.Id.IntegerValue.ToString(),
+                                        ResultItemType.Info);
+                                }
                                 else
+                                {
                                     SetParameterValue(pair.Key, parameter, numerateData, pair.Value, isInstanceParameter);
+                                }
                             }
                         }
                         catch (Autodesk.Revit.Exceptions.OperationCanceledException)
@@ -181,33 +196,18 @@
                         }
                         catch (Exception exception)
                         {
-                            if (errors.ContainsKey(exception.Message))
-                                errors[exception.Message].Add(pair.Key.Id.IntegerValue);
-                            else
-                                errors.Add(exception.Message, new List<int> { pair.Key.Id.IntegerValue });
+                            // При изменении значения параметров перечисленных элементов произошли ошибки
+                            resultService.Add(
+                                $"{Language.GetItem("h17")}: {exception.Message}",
+                                pair.Key.Id.IntegerValue.ToString(),
+                                ResultItemType.Error);
                         }
                     }
 
                     transaction.Commit();
                 }
-
-                if (readOnlyParameters.Any())
-                {
-                    // Параметр "..." имеет свойство "Только для чтения" у следующих элементов
-                    ModPlusAPI.IO.String.ShowTextWithNotepad(
-                        $"{Language.GetItem(LangItem, "h14")} \"{numerateData.ParameterName}\" {Language.GetItem(LangItem, "h15")}:" +
-                        $"{Environment.NewLine}{string.Join(",", readOnlyParameters.Distinct())}",
-                        LangItem);
-                }
-
-                if (errors.Any())
-                {
-                    // При изменении значения параметров перечисленных элементов произошли ошибки
-                    ModPlusAPI.IO.String.ShowTextWithNotepad(
-                        $"{Language.GetItem(LangItem, "h17")}{Environment.NewLine}" +
-                        $"{string.Join(Environment.NewLine, errors.Select(p => $"{p.Key}: {string.Join(",", p.Value)}"))}",
-                        LangItem);
-                }
+                
+                resultService.ShowByType();
 
                 _uiApplication.Application.FailuresProcessing -= ApplicationOnFailuresProcessing;
             }
@@ -218,7 +218,7 @@
         }
 
         private IDictionary<Element, int> CollectElementsInSchedule(
-            NumerateData numerateData, ViewSchedule viewSchedule, out bool canBeTypeParameter)
+            InScheduleNumerateData numerateData, ViewSchedule viewSchedule, out bool canBeTypeParameter)
         {
             var newNumbers = new Dictionary<Element, int>();
 
@@ -283,52 +283,6 @@
             return newNumbers;
         }
 
-        private IDictionary<Element, int> CollectElementsNotInSchedule(NumerateData numerateData)
-        {
-            var newNumbers = new Dictionary<Element, int>();
-
-            var uiDoc = _uiApplication.ActiveUIDocument;
-            var sortElements = new List<Element>();
-            var elementIds = uiDoc.Selection.GetElementIds();
-            if (elementIds.Any())
-            {
-                var selectedElements = elementIds
-                    .Select(elementId => _doc.GetElement(elementId))
-                    .Where(ModelElementsSelectionFilter.IsValid);
-
-                sortElements = numerateData.LocationOrder == LocationOrder.Creation
-                    ? selectedElements.ToList()
-                    : GetSortedElementsFromSelection(selectedElements, numerateData);
-            }
-            else
-            {
-                try
-                {
-                    var pickedElements = uiDoc.Selection
-                        .PickObjects(ObjectType.Element, new ModelElementsSelectionFilter(), Language.GetItem(LangItem, "m1"))
-                        .Select(r => _doc.GetElement(r));
-                    sortElements = numerateData.LocationOrder == LocationOrder.Creation
-                        ? pickedElements.ToList()
-                        : GetSortedElementsFromSelection(pickedElements, numerateData);
-                }
-                catch (Autodesk.Revit.Exceptions.OperationCanceledException)
-                {
-                    // ignore
-                }
-            }
-
-            for (var i = 0; i < sortElements.Count; i++)
-            {
-                var e = sortElements[i];
-                var markValue = numerateData.OrderDirection == OrderDirection.Ascending
-                    ? numerateData.StartValue + i
-                    : sortElements.Count + numerateData.StartValue - i - 1;
-                newNumbers.Add(e, markValue);
-            }
-
-            return newNumbers;
-        }
-
         private static void SetParameterValue(
             Element element, Parameter parameter, NumerateData numerateData, int markNumber, bool isInstanceParameter)
         {
@@ -348,7 +302,7 @@
                 }
             }
 
-            if (numerateData.IsNumeric)
+            if (numerateData.Parameter.IsNumeric)
             {
                 if (parameter.StorageType == StorageType.Integer)
                 {
@@ -356,7 +310,7 @@
                 }
                 else if (parameter.StorageType == StorageType.Double)
                 {
-#if R2015 || R2016 || R2017 || R2018 || R2019 || R2020
+#if R2017 || R2018 || R2019 || R2020
                     parameter.Set(UnitUtils.ConvertToInternalUnits(markNumber, parameter.DisplayUnitType));
 #else
                     parameter.Set(UnitUtils.ConvertToInternalUnits(markNumber, parameter.GetUnitTypeId()));
@@ -707,8 +661,8 @@
             viewSchedule.Document.Regenerate();
         }
 
-        private static List<Element> GetSortedElementsFromSelection(
-            IEnumerable<Element> elements, NumerateData numerateData)
+        private static List<Element> GetElementsSortedByLocation(
+            IEnumerable<Element> elements, InViewNumerateData numerateData)
         {
             var sortedElements = new List<Element>();
 
