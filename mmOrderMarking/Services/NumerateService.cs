@@ -25,7 +25,8 @@
         private readonly List<BuiltInParameter> _allowableBuiltInParameter = new List<BuiltInParameter>
         {
             BuiltInParameter.ALL_MODEL_INSTANCE_COMMENTS,
-            BuiltInParameter.SHEET_NAME
+            BuiltInParameter.SHEET_NAME,
+            BuiltInParameter.VIEW_NAME,
         };
 
         /// <summary>
@@ -67,7 +68,6 @@
             
             if (selectionType == ElementsSelectionType.ByRectangle)
             {
-                
                 orderDirection = OrderDirection.Ascending;
                 sortElements = numerateData.LocationOrder == LocationOrder.Creation
                     ? elements

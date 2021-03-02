@@ -39,7 +39,7 @@
                     .WhereElementIsNotElementType();
                 if (!el.Any())
                 {
-                    MessageBox.Show(Language.GetItem("mmOrderMarking", "m2"));
+                    MessageBox.Show(Language.GetItem("m2"));
                     return Result.Cancelled;
                 }
 
